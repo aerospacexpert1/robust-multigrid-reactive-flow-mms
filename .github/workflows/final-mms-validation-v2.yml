@@ -1,36 +1,43 @@
-name: Final MMS A-D validation v2
+name: Final MMS A-D validation V2
 
 on:
+  push:
+    branches: [mms-benchmarks-v2]
+    paths:
+      - 'tools/**'
+      - '.github/workflows/final-mms-validation-v2.yml'
   workflow_dispatch:
-  issues:
-    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
-  validate:
+  validate-v2:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
-      - name: Run complete final validation
-        run: bash tools/final_validate.sh
-      - uses: actions/upload-artifact@v4
         with:
-          name: MMS_BENCHMARKS_ABCD_TRUBA_V1
-          path: MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
+          ref: mms-benchmarks-v2
+      - name: Install validation dependencies
+        run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
+      - name: Generate and run full V2 validation
+        run: bash tools/final_validate.sh
+      - name: Upload validated V2 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: MMS_BENCHMARKS_ABCD_TRUBA_V2
+          path: MMS_BENCHMARKS_ABCD_TRUBA_V2.zip
           if-no-files-found: error
-      - name: Publish validated artifact and report
+          retention-days: 30
+      - name: Publish validated V2 ZIP and report on branch
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp MMS_BENCHMARKS_ABCD_TRUBA_V1.zip dist/MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
-          cp MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt dist/VALIDATION_REPORT.txt
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V2.zip dist/MMS_BENCHMARKS_ABCD_TRUBA_V2.zip
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V2/VALIDATION_REPORT.txt dist/VALIDATION_REPORT_V2.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist
-          git commit -m 'Publish final validated MMS A-D artifact [skip ci]' || true
-          git push
+          git add dist/MMS_BENCHMARKS_ABCD_TRUBA_V2.zip dist/VALIDATION_REPORT_V2.txt
+          git commit -m 'Publish validated MMS A-D V2 artifact [skip ci]' || true
+          git push origin HEAD:mms-benchmarks-v2
