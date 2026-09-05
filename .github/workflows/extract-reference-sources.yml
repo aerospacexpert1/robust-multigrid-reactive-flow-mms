@@ -1,0 +1,32 @@
+name: Extract exact reference sources
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Extract selected source files
+        run: |
+          set -euo pipefail
+          rm -rf _reference_sources /tmp/refzip /tmp/refout
+          mkdir -p _reference_sources /tmp/refzip /tmp/refout
+          git fetch origin aerospacexpert1-patch-1
+          for z in RMT_3H_TRUBA_96CASE_TRUBA_FIXED_V2.zip MG3V_3LEVEL_TRUBA_96CASE.zip MG2V_3LEVEL_TRUBA_96CASE.zip MG2W_3LEVEL_TRUBA_96CASE.zip SG_RBGS_TRUBA_96CASE.zip OpenFOAM_v2312_TRUBA_CLEAN_96cases_1_2_4_16.zip; do
+            git show "origin/aerospacexpert1-patch-1:$z" > "/tmp/refzip/$z"
+            d="/tmp/refout/${z%.zip}"; mkdir -p "$d"; unzip -q "/tmp/refzip/$z" -d "$d"
+          done
+          find /tmp/refout -type f \( -name '*.c' -o -name '*.h' -o -name 'Makefile' -o -name 'build.sh' -o -name 'run_case.sh' -o -name '*.slurm' -o -name 'fvSchemes' -o -name 'fvSolution' -o -name 'thermophysicalProperties' -o -name 'thermophysicalModels' -o -name 'chemistryProperties' -o -name 'combustionProperties' -o -name 'blockMeshDict' \) -print0 | while IFS= read -r -d '' f; do
+            rel="${f#/tmp/refout/}"; mkdir -p "_reference_sources/$(dirname "$rel")"; cp "$f" "_reference_sources/$rel";
+          done
+      - name: Commit exact reference sources
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _reference_sources
+          if ! git diff --cached --quiet; then git commit -m 'Add exact extracted production reference sources [skip ci]'; git push; fi
