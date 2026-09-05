@@ -1,0 +1,68 @@
+name: Reference inventory
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch reference branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin aerospacexpert1-patch-1
+          for f in Benchmark_A-E_TRUBA_Rerun_2026.zip MG2V_3LEVEL_TRUBA_96CASE.zip MG2W_3LEVEL_TRUBA_96CASE.zip MG3V_3LEVEL_TRUBA_96CASE.zip OpenFOAM_v2312_TRUBA_CLEAN_96cases_1_2_4_16.zip RMT_3H_TRUBA_96CASE_TRUBA_FIXED_V2.zip SG_RBGS_TRUBA_96CASE.zip; do
+            git show "origin/aerospacexpert1-patch-1:$f" > "$f"
+          done
+      - name: Extract reference packages and create readable snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _ref_unpack _reference_snapshot
+          mkdir -p _ref_unpack _reference_snapshot
+          : > _reference_snapshot/ZIP_LISTINGS.txt
+          for z in *.zip; do
+            stem="${z%.zip}"
+            safe="$(printf '%s' "$stem" | tr ' /()' '_____')"
+            mkdir -p "_ref_unpack/$safe"
+            echo "===== $z =====" >> _reference_snapshot/ZIP_LISTINGS.txt
+            unzip -l "$z" >> _reference_snapshot/ZIP_LISTINGS.txt
+            unzip -q "$z" -d "_ref_unpack/$safe"
+          done
+          patterns='(opposedflow.*\.c$|rmt.*\.c$|mg.*\.c$|rbgs.*\.c$|benchmark.*\.c$|run_case\.sh$|campaign_manifest\.csv$|submit_all\.sh$|submit_task0\.sh$|.*\.slurm$|Makefile$|build\.sh$|thermophysicalProperties$|thermophysicalModels$|chemistryProperties$|combustionProperties$|turbulenceProperties$|momentumTransport$|transportProperties$|fvSchemes$|fvSolution$|blockMeshDict$|controlDict$|reactions$|chem\.inp$|therm\.dat$|0/(U|p|p_rgh|T|h|YF|YO|YP)$)'
+          for d in _ref_unpack/*; do
+            out="_reference_snapshot/$(basename "$d")_TEXT_DUMP.txt"
+            : > "$out"
+            while IFS= read -r f; do
+              rel="${f#_ref_unpack/}"
+              if [[ "$rel" =~ $patterns ]]; then
+                size=$(wc -c < "$f")
+                if [ "$size" -le 1500000 ] && grep -Iq . "$f" 2>/dev/null; then
+                  printf '\n\n===== FILE: %s =====\n' "$rel" >> "$out"
+                  cat "$f" >> "$out"
+                  printf '\n' >> "$out"
+                fi
+              fi
+            done < <(find "$d" -type f | sort)
+          done
+          find _ref_unpack -type f | sort > _reference_snapshot/EXTRACTED_FILE_TREE.txt
+          rm -rf _ref_unpack *.zip
+      - name: Commit snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _reference_snapshot
+          if ! git diff --cached --quiet; then
+            git commit -m "Add extracted reference inventory [skip ci]"
+            git push
+          fi
