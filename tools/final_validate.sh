@@ -127,7 +127,10 @@ for d in "$ROOT"/Benchmark_*; do
   done
 done
 
-# Grid-convergence sanity on the production mesh family M1->M2->M3.
+# Grid-convergence sanity on the production mesh family M1->M2->M3.  Use MG3V
+# purely as the algebraic solver so spatial truncation error is not polluted by the
+# mesh-dependent convergence cost of standalone SG_RBGS.  The separate M1 gate above
+# still requires all five solvers, including SG_RBGS and RMT3H, to converge.
 python3 - <<'PY'
 import csv,glob,subprocess,os,math,tempfile
 lines=[]
@@ -135,11 +138,11 @@ for d in sorted(glob.glob('MMS_BENCHMARKS_ABCD_TRUBA_V2/Benchmark_*')):
     es=[]
     for nx,ny in [(108,36),(216,72),(432,144)]:
         p=tempfile.mktemp('.csv'); env=os.environ.copy();env['OMP_NUM_THREADS']='1';env['OMP_THREAD_LIMIT']='1'
-        subprocess.run([d+'/build/mms_solver','--Nx',str(nx),'--Ny',str(ny),'--stiffness','S1','--solver','SG_RBGS','--out',p],check=True,env=env,stdout=subprocess.DEVNULL)
+        subprocess.run([d+'/build/mms_solver','--Nx',str(nx),'--Ny',str(ny),'--stiffness','S1','--solver','MG3V','--out',p],check=True,env=env,stdout=subprocess.DEVNULL)
         r=list(csv.DictReader(open(p)))[0]; e=float(r['L2']); os.unlink(p); assert math.isfinite(e); es.append(e)
     assert es[2] < es[0],(d,es)
     order=math.log(es[0]/es[2])/math.log(4.0) if es[2]>0 else 99
-    lines.append(f'{os.path.basename(d)} L2={es} aggregate_order={order:.6f}')
+    lines.append(f'{os.path.basename(d)} L2={es} aggregate_order={order:.6f} algebraic_solver=MG3V')
 open('v2_grid_sanity.txt','w').write('\n'.join(lines)+'\n')
 print(open('v2_grid_sanity.txt').read())
 PY
@@ -186,7 +189,7 @@ OMP mapping 1/2/4/16: PASS
 Slurm nodes=1 ntasks=1 cpus-per-task=56: PASS
 SLURM_SUBMIT_DIR fix: PASS
 continuous-source finite sanity S1-S3 at M1: PASS
-M1->M2->M3 grid-convergence sanity: PASS
+M1->M2->M3 grid-convergence sanity using converged MG3V algebraic solves: PASS
 solver-produced exact/numerical/error contours: PASS
 A-D contour distinctness: PASS
 EOF
