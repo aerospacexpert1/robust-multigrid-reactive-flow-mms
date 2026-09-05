@@ -1,0 +1,35 @@
+MMS_BENCHMARKS_ABCD_TRUBA_V2 — FINAL VALIDATION
+================================================
+continuous analytic MMS; no b_h=A_h phi_exact: PASS
+V2 pressure projection / corrected-flux continuity metric: PASS
+momentum predictor pressure-gradient split exactly once: PASS
+chemistry-off species transport: PASS
+D sensible-enthalpy transport + h->T->rho closure: PASS
+D operator-split Arrhenius heat-release kernel check: PASS
+recursive factor-three nine-shift RMT structure: PASS
+RMT residual-correction field + top-level-only omega line search: PASS
+shell / Slurm syntax: PASS
+Python syntax: PASS
+GCC -fopenmp A/B/C/D: PASS
+M1=108x36 A-D x all five solver smoke: PASS
+RMT3H M1 convergence mandatory check: PASS
+D normalized T/rho/Qchem error schema and sanity: PASS
+300 executions/benchmark; 1200 total: PASS
+60 physical configurations/benchmark; 240 total: PASS
+S1/S2/S3 counts 100 each/benchmark: PASS
+T1/T2/T4/T16 counts 75 each/benchmark: PASS
+M1..M5 counts 60 each/benchmark: PASS
+solver counts 60 each/benchmark: PASS
+OMP mapping 1/2/4/16: PASS
+Slurm nodes=1 ntasks=1 cpus-per-task=56: PASS
+SLURM_SUBMIT_DIR fix: PASS
+continuous-source finite sanity S1-S3 at M1: PASS
+M1->M2->M3 grid-convergence sanity using converged MG3V algebraic solves: PASS
+solver-produced exact/numerical/error contours: PASS
+A-D contour distinctness: PASS
+Benchmark_A_Pressure_Projection L2=[0.0009440814084661, 0.0002313541179349, 5.728151537756e-05] aggregate_order=2.021385 algebraic_solver=MG3V
+Benchmark_B_Momentum L2=[0.005203260094603, 0.002677549557281, 0.001358380067192] aggregate_order=0.968764 algebraic_solver=MG3V
+Benchmark_C_Species_Transport L2=[0.000567263208022, 0.0002958290654661, 0.0001510728571874] aggregate_order=0.954387 algebraic_solver=MG3V
+Benchmark_D_Thermochemistry L2=[37152.02162687, 19720.2128098, 10192.1975944] aggregate_order=0.932988 algebraic_solver=MG3V
+ZIP integrity: PASS
+fresh extraction verify/build/M1 SG+RMT smoke: PASS
