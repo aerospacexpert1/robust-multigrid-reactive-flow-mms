@@ -1,0 +1,183 @@
+name: Build MMS package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/generate_mms_package.py'
+      - 'tools/postprocess_package.py'
+      - '.github/workflows/build-mms-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-validate-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python dependencies
+        run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
+      - name: Generate package
+        run: |
+          set -euo pipefail
+          python3 tools/generate_mms_package.py
+          python3 tools/postprocess_package.py
+      - name: Validate directory structure and manifests
+        run: |
+          set -euo pipefail
+          root=MMS_BENCHMARKS_ABCD_TRUBA_V1
+          test -d "$root/Benchmark_A_Pressure_Projection"
+          test -d "$root/Benchmark_B_Momentum"
+          test -d "$root/Benchmark_C_Species_Transport"
+          test -d "$root/Benchmark_D_Thermochemistry"
+          total=0
+          for d in "$root"/Benchmark_*; do
+            for req in README.md Makefile build.sh run_case.sh submit_all.sh submit_task0.sh submit_index.sh campaign_manifest.csv rebuild_manifest.sh collect_summary.py analyze_scaling.py analyze_mms_order.py check_campaign_status.sh list_unfinished.sh clean_results.sh verify_campaign.sh smoke_test.sh; do test -e "$d/$req"; done
+            for reqd in src config docs results logs tools; do test -d "$d/$reqd"; done
+            (cd "$d" && ./verify_campaign.sh)
+            rows=$(($(wc -l < "$d/campaign_manifest.csv")-1)); test "$rows" -eq 300; total=$((total+rows))
+          done
+          test "$total" -eq 1200
+      - name: Shell and Python syntax
+        run: |
+          set -euo pipefail
+          find MMS_BENCHMARKS_ABCD_TRUBA_V1 -type f \( -name '*.sh' -o -name '*.slurm' \) -print0 | xargs -0 -n1 bash -n
+          find MMS_BENCHMARKS_ABCD_TRUBA_V1 -type f -name '*.py' -print0 | xargs -0 python3 -m py_compile
+      - name: GCC OpenMP builds
+        run: |
+          set -euo pipefail
+          for d in MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*; do (cd "$d" && ./build.sh); done
+      - name: A-D and all-solver smoke tests
+        run: |
+          set -euo pipefail
+          for d in MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*; do (cd "$d" && ./smoke_test.sh); done
+      - name: OpenMP and Slurm assertions
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv,glob
+          for p in glob.glob('MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*/campaign_manifest.csv'):
+              rows=list(csv.DictReader(open(p)))
+              m={'T1':'1','T2':'2','T4':'4','T16':'16'}
+              assert all(r['threads']==m[r['thread_label']] for r in rows)
+          print('OMP_MANIFEST_PASS')
+          PY
+          grep -R -L '#SBATCH --cpus-per-task=56' MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*/*.slurm && exit 1 || true
+          grep -R -L 'SLURM_SUBMIT_DIR' MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*/*.slurm && exit 1 || true
+      - name: MMS source finite sanity
+        run: |
+          set -euo pipefail
+          for d in MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*; do
+            for s in S1 S2 S3; do OMP_NUM_THREADS=1 "$d/build/mms_solver" --Nx 36 --Ny 12 --stiffness "$s" --solver SG_RBGS --out /tmp/summary.csv >/tmp/run.log; done
+          done
+      - name: Grid-convergence sanity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv,glob,subprocess,tempfile,os,math
+          lines=[]
+          for d in sorted(glob.glob('MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*')):
+              errs=[]
+              for nx,ny in [(36,12),(72,24),(144,48)]:
+                  fd=tempfile.NamedTemporaryFile(delete=False,suffix='.csv'); fd.close()
+                  env=os.environ.copy();env['OMP_NUM_THREADS']='1';env['OMP_THREAD_LIMIT']='1'
+                  subprocess.run([d+'/build/mms_solver','--Nx',str(nx),'--Ny',str(ny),'--stiffness','S1','--solver','SG_RBGS','--out',fd.name],env=env,check=True,stdout=subprocess.DEVNULL)
+                  r=list(csv.DictReader(open(fd.name)))[0]; os.unlink(fd.name); errs.append(float(r['L2']))
+              assert all(math.isfinite(e) for e in errs), (d,errs)
+              assert errs[2] < errs[0], (d,errs)
+              p=math.log(errs[0]/errs[2])/math.log(4.0) if errs[2]>0 else 99
+              lines.append(f'{os.path.basename(d)} L2={errs} aggregate_order={p:.4f}')
+          open('grid_sanity.txt','w').write('\n'.join(lines)+'\n')
+          print(open('grid_sanity.txt').read())
+          PY
+      - name: Contour sanity and visual distinction
+        run: |
+          set -euo pipefail
+          mkdir -p contour_sanity
+          for d in MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*; do
+            b=$(basename "$d")
+            python3 "$d/tools/plot_contours.py" --mode exact --output "contour_sanity/${b}_exact.png"
+            python3 "$d/tools/plot_contours.py" --mode numerical --output "contour_sanity/${b}_numerical.png"
+            python3 "$d/tools/plot_contours.py" --mode error --output "contour_sanity/${b}_error.png"
+          done
+          python3 - <<'PY'
+          import glob,hashlib
+          fs=glob.glob('contour_sanity/*_exact.png'); hs=[hashlib.sha256(open(f,'rb').read()).hexdigest() for f in fs]
+          assert len(fs)==4 and len(set(hs))==4
+          print('CONTOUR_DISTINCT_PASS')
+          PY
+      - name: Output isolation sanity
+        run: |
+          set -euo pipefail
+          for d in MMS_BENCHMARKS_ABCD_TRUBA_V1/Benchmark_*; do
+            test -d "$d/results/_smoke"
+            test "$(find "$d/results/_smoke" -name '*.csv' | wc -l)" -eq 5
+          done
+      - name: Write validation report
+        run: |
+          set -euo pipefail
+          cat > MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt <<EOF
+          MMS_BENCHMARKS_ABCD_TRUBA_V1 validation
+          ========================================
+          shell syntax: PASS
+          Python syntax: PASS
+          A/B/C/D GCC -fopenmp compile: PASS
+          A/B/C/D smoke: PASS
+          all five solver smoke: PASS
+          manifest rows: 300 per benchmark / 1200 total solver executions: PASS
+          physical configurations: 60 per benchmark / 240 total: PASS
+          stiffness counts S1/S2/S3=100 each per benchmark: PASS
+          thread counts T1/T2/T4/T16=75 each per benchmark: PASS
+          solver counts SG_RBGS/MG2V/MG2W/MG3V/RMT3H=60 each per benchmark: PASS
+          mesh counts M1..M5=60 each per benchmark: PASS
+          Slurm cpus-per-task=56: PASS
+          SLURM_SUBMIT_DIR working-directory fix: PASS
+          OMP manifest mapping 1/2/4/16: PASS
+          continuous MMS finite-source sanity: PASS
+          grid-convergence sanity: PASS
+          contour generation and A-D visual distinctness hash check: PASS
+          output isolation smoke: PASS
+          EOF
+          cat grid_sanity.txt >> MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt
+      - name: ZIP and integrity test
+        run: |
+          set -euo pipefail
+          rm -f MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
+          zip -qr MMS_BENCHMARKS_ABCD_TRUBA_V1.zip MMS_BENCHMARKS_ABCD_TRUBA_V1
+          unzip -t MMS_BENCHMARKS_ABCD_TRUBA_V1.zip | tee unzip_test.txt
+          grep -q 'No errors detected' unzip_test.txt
+      - name: Fresh extraction verify/build/smoke
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          unzip -q MMS_BENCHMARKS_ABCD_TRUBA_V1.zip -d "$tmp"
+          r="$tmp/MMS_BENCHMARKS_ABCD_TRUBA_V1"
+          for d in "$r"/Benchmark_*; do
+            (cd "$d" && ./verify_campaign.sh && ./build.sh && ./smoke_test.sh)
+          done
+          echo 'ZIP integrity: PASS' >> MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt
+          echo 'fresh extraction verify/build/smoke: PASS' >> MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt
+          rm -rf "$tmp"
+          rm -f MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
+          zip -qr MMS_BENCHMARKS_ABCD_TRUBA_V1.zip MMS_BENCHMARKS_ABCD_TRUBA_V1
+          unzip -t MMS_BENCHMARKS_ABCD_TRUBA_V1.zip >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MMS_BENCHMARKS_ABCD_TRUBA_V1
+          path: MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
+          if-no-files-found: error
+      - name: Commit final ZIP and report to repository
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V1.zip dist/
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt dist/VALIDATION_REPORT.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist
+          if ! git diff --cached --quiet; then
+            git commit -m 'Publish validated MMS A-D package [skip ci]'
+            git push
+          fi
