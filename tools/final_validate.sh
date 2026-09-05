@@ -24,6 +24,7 @@ python3 tools/v2_patch.py
 python3 tools/v2_postfix.py
 python3 tools/v2_rmtfix.py
 python3 tools/v2_dfix.py
+python3 tools/v2_bfix.py
 
 # Structure and independence.
 for name in Benchmark_A_Pressure_Projection Benchmark_B_Momentum Benchmark_C_Species_Transport Benchmark_D_Thermochemistry; do
@@ -36,7 +37,7 @@ test -s "$ROOT/V2_METHOD_CHANGES.md"
 # Syntax.
 find "$ROOT" -type f \( -name '*.sh' -o -name '*.slurm' \) -print0 | xargs -0 -n1 bash -n
 find "$ROOT" -type f -name '*.py' -print0 | xargs -0 python3 -m py_compile
-python3 -m py_compile tools/v2_patch.py tools/v2_postfix.py tools/v2_rmtfix.py tools/v2_dfix.py
+python3 -m py_compile tools/v2_patch.py tools/v2_postfix.py tools/v2_rmtfix.py tools/v2_dfix.py tools/v2_bfix.py tools/v2_generator_fix.py
 
 # Exact campaign matrix.
 python3 - <<'PY'
@@ -76,7 +77,8 @@ for c in "$ROOT"/Benchmark_*/src/mms_solver.c; do
 done
 grep -q 'double De=dy/dx' "$ROOT/Benchmark_A_Pressure_Projection/src/mms_solver.c"
 grep -q 'projection_continuity' "$ROOT/Benchmark_A_Pressure_Projection/src/mms_solver.c"
-grep -q 'mms_pdx' "$ROOT/Benchmark_B_Momentum/src/mms_solver.c"
+grep -q 'mms_pdx' "$ROOT/Benchmark_B_Momentum/src/mms_generated.h"
+if grep -q "if(BENCH_ID=='B')s->b\[k\]-=" "$ROOT/Benchmark_B_Momentum/src/mms_solver.c"; then echo 'duplicate B pressure subtraction remains'; exit 1; fi
 grep -q 'd_rhs_nonlinear' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
 grep -q 'thermo_T' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
 grep -q 'qchem_num' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
@@ -162,7 +164,7 @@ MMS_BENCHMARKS_ABCD_TRUBA_V2 — FINAL VALIDATION
 ================================================
 continuous analytic MMS; no b_h=A_h phi_exact: PASS
 V2 pressure projection / corrected-flux continuity metric: PASS
-known pressure-gradient momentum forcing retained: PASS
+momentum predictor pressure-gradient split exactly once: PASS
 chemistry-off species transport: PASS
 D sensible-enthalpy transport + h->T->rho closure: PASS
 D operator-split Arrhenius heat-release kernel check: PASS
