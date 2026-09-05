@@ -1,0 +1,68 @@
+name: Reference inventory
+
+on:
+  push:
+    branches: [mms-abcd-build]
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract reference packages and create readable snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _ref_unpack _reference_snapshot
+          mkdir -p _ref_unpack _reference_snapshot
+          : > _reference_snapshot/ZIP_LISTINGS.txt
+          for z in *.zip; do
+            [ -f "$z" ] || continue
+            stem="${z%.zip}"
+            safe="$(printf '%s' "$stem" | tr ' /()' '_____')"
+            mkdir -p "_ref_unpack/$safe"
+            echo "===== $z =====" >> _reference_snapshot/ZIP_LISTINGS.txt
+            unzip -l "$z" >> _reference_snapshot/ZIP_LISTINGS.txt
+            unzip -q "$z" -d "_ref_unpack/$safe"
+          done
+
+          patterns='(opposedflow.*\.c$|rmt.*\.c$|mg.*\.c$|rbgs.*\.c$|benchmark.*\.c$|run_case\.sh$|campaign_manifest\.csv$|submit_all\.sh$|submit_task0\.sh$|.*\.slurm$|Makefile$|build\.sh$|thermophysicalProperties$|thermophysicalModels$|chemistryProperties$|combustionProperties$|turbulenceProperties$|momentumTransport$|transportProperties$|fvSchemes$|fvSolution$|blockMeshDict$|controlDict$|reactions$|chem\.inp$|therm\.dat$|0/(U|p|p_rgh|T|h|YF|YO|YP)$)'
+
+          for d in _ref_unpack/*; do
+            [ -d "$d" ] || continue
+            out="_reference_snapshot/$(basename "$d")_TEXT_DUMP.txt"
+            : > "$out"
+            while IFS= read -r f; do
+              rel="${f#_ref_unpack/}"
+              if [[ "$rel" =~ $patterns ]]; then
+                size=$(wc -c < "$f" || echo 0)
+                if [ "$size" -le 1500000 ] && grep -Iq . "$f" 2>/dev/null; then
+                  printf '\n\n===== FILE: %s =====\n' "$rel" >> "$out"
+                  cat "$f" >> "$out"
+                  printf '\n' >> "$out"
+                fi
+              fi
+            done < <(find "$d" -type f | sort)
+          done
+
+          find _ref_unpack -type f | sort > _reference_snapshot/EXTRACTED_FILE_TREE.txt
+          rm -rf _ref_unpack
+
+      - name: Commit snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _reference_snapshot
+          if git diff --cached --quiet; then
+            echo "No snapshot changes"
+          else
+            git commit -m "Add extracted reference inventory [skip ci]"
+            git push origin HEAD:mms-abcd-build
+          fi
