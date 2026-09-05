@@ -3,8 +3,8 @@ set -euo pipefail
 ROOT=MMS_BENCHMARKS_ABCD_TRUBA_V2
 ZIP=MMS_BENCHMARKS_ABCD_TRUBA_V2.zip
 
-# Generate the reproducible base package, apply V1 transfer-kernel fidelity patch,
-# then apply the production-fidelity V2 corrections.
+# Generate the reproducible base package, apply the transfer-kernel fidelity patch,
+# then apply V2 physics, compile-postfix and production-flow RMT corrections.
 sed -i 's/sp\.simplify(e)/e/g' tools/generate_mms_package.py
 python3 tools/generate_mms_package.py
 python3 tools/postprocess_package.py
@@ -21,6 +21,8 @@ p.write_text(s)
 PY
 python3 tools/fidelity_patch.py
 python3 tools/v2_patch.py
+python3 tools/v2_postfix.py
+python3 tools/v2_rmtfix.py
 
 # Structure and independence.
 for name in Benchmark_A_Pressure_Projection Benchmark_B_Momentum Benchmark_C_Species_Transport Benchmark_D_Thermochemistry; do
@@ -33,7 +35,7 @@ test -s "$ROOT/V2_METHOD_CHANGES.md"
 # Syntax.
 find "$ROOT" -type f \( -name '*.sh' -o -name '*.slurm' \) -print0 | xargs -0 -n1 bash -n
 find "$ROOT" -type f -name '*.py' -print0 | xargs -0 python3 -m py_compile
-python3 -m py_compile tools/v2_patch.py
+python3 -m py_compile tools/v2_patch.py tools/v2_postfix.py tools/v2_rmtfix.py
 
 # Exact campaign matrix.
 python3 - <<'PY'
@@ -63,13 +65,14 @@ done
 for f in "$ROOT"/Benchmark_*/run_case.sh; do grep -q OMP_NUM_THREADS "$f"; grep -q OMP_THREAD_LIMIT "$f"; done
 
 # V2 source invariants: constant pressure Laplacian, known momentum pressure forcing,
-# recursive nine-shift RMT, nonlinear thermochemistry closure.
+# recursive nine-shift RMT, top-level-only damping, nonlinear thermochemistry closure.
 for c in "$ROOT"/Benchmark_*/src/mms_solver.c; do
   grep -q 'rmt_error_recursive' "$c"
-  grep -q 'for(int sy=0;sy<3;sy++)for(int sx=0;sx<3;sx++)' "$c"
+  grep -q 'for(int sx=0;sx<3;sx++)for(int sy=0;sy<3;sy++)' "$c"
   grep -q 'rmt_error_recursive(&c,level+1)' "$c"
-  grep -q '0.005.c.q' "$c"
-  grep -q 'rbgs(s,3)' "$c"
+  grep -q 'double omegaTry=0.005' "$c"
+  grep -q 'rbgs(s,6)' "$c"
+  if grep -q '0.005.c.q' "$c"; then echo "per-level RMT damping found in $c"; exit 1; fi
 done
 grep -q 'double De=dy/dx' "$ROOT/Benchmark_A_Pressure_Projection/src/mms_solver.c"
 grep -q 'projection_continuity' "$ROOT/Benchmark_A_Pressure_Projection/src/mms_solver.c"
@@ -85,7 +88,7 @@ for d in "$ROOT"/Benchmark_*; do (cd "$d" && ./verify_campaign.sh && ./build.sh)
 # Mandatory real-campaign M1 smoke: A-D x all five solvers at 108x36, not 36x12.
 rm -rf v2_smoke; mkdir v2_smoke
 python3 - <<'PY'
-import subprocess,glob,os,csv,math,pathlib
+import subprocess,glob,os,csv,math
 solvers=['SG_RBGS','MG2V','MG2W','MG3V','RMT3H']
 for d in sorted(glob.glob('MMS_BENCHMARKS_ABCD_TRUBA_V2/Benchmark_*')):
     b=os.path.basename(d)
@@ -161,6 +164,7 @@ known pressure-gradient momentum forcing retained: PASS
 chemistry-off species transport: PASS
 D nonlinear h -> T -> rho -> Arrhenius heat-release Picard closure: PASS
 recursive factor-three nine-shift RMT structure: PASS
+RMT residual-correction field + top-level-only omega line search: PASS
 shell / Slurm syntax: PASS
 Python syntax: PASS
 GCC -fopenmp A/B/C/D: PASS
