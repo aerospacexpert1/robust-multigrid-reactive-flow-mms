@@ -4,6 +4,8 @@ REQ=['p','u','v','YF','YO','YP','h','T','rho','k','diff','uadv','vadv','src_p','
 root=Path('MMS_BENCHMARKS_ABCD_TRUBA_V1')
 for h in root.glob('Benchmark_*/src/mms_generated.h'):
     txt=h.read_text()
+    if '#ifndef M_PI' not in txt:
+        txt=txt.replace('#include <math.h>','#include <math.h>\n#ifndef M_PI\n#define M_PI 3.141592653589793238462643383279502884\n#endif',1)
     add=[]
     for n in REQ:
         if f'double mms_{n}(' not in txt:
@@ -16,6 +18,7 @@ for h in root.glob('Benchmark_*/src/mms_generated.h'):
 
 plot=r'''#!/usr/bin/env python3
 import argparse, math
+from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 p=argparse.ArgumentParser();p.add_argument('--mode',choices=['exact','numerical','error'],default='exact');p.add_argument('--output',default='contour.png');p.add_argument('--benchmark',default=None);a=p.parse_args()
@@ -33,6 +36,6 @@ elif a.mode=='error': Z=np.abs(1e-3*np.sin(np.pi*X/3)*np.sin(np.pi*Y))
 plt.figure(figsize=(7,2.8));plt.contourf(X,Y,Z,40);plt.colorbar();plt.xlabel('x');plt.ylabel('y');plt.tight_layout();plt.savefig(a.output,dpi=130);plt.close()
 '''
 for d in root.glob('Benchmark_*'):
-    (d/'tools'/'plot_contours.py').write_text('from pathlib import Path\n'+plot)
+    (d/'tools'/'plot_contours.py').write_text(plot)
     (d/'tools'/'plot_contours.py').chmod(0o755)
 print('postprocessed')
