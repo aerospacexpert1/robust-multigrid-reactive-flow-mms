@@ -3,8 +3,8 @@ set -euo pipefail
 ROOT=MMS_BENCHMARKS_ABCD_TRUBA_V2
 ZIP=MMS_BENCHMARKS_ABCD_TRUBA_V2.zip
 
-# Generate the reproducible base package, apply the transfer-kernel fidelity patch,
-# then apply V2 physics, compile-postfix and production-flow RMT corrections.
+# Generate the reproducible base package, apply transfer/operator fidelity patches,
+# then apply production-flow RMT and operator-split thermochemistry corrections.
 sed -i 's/sp\.simplify(e)/e/g' tools/generate_mms_package.py
 python3 tools/generate_mms_package.py
 python3 tools/postprocess_package.py
@@ -23,6 +23,7 @@ python3 tools/fidelity_patch.py
 python3 tools/v2_patch.py
 python3 tools/v2_postfix.py
 python3 tools/v2_rmtfix.py
+python3 tools/v2_dfix.py
 
 # Structure and independence.
 for name in Benchmark_A_Pressure_Projection Benchmark_B_Momentum Benchmark_C_Species_Transport Benchmark_D_Thermochemistry; do
@@ -35,7 +36,7 @@ test -s "$ROOT/V2_METHOD_CHANGES.md"
 # Syntax.
 find "$ROOT" -type f \( -name '*.sh' -o -name '*.slurm' \) -print0 | xargs -0 -n1 bash -n
 find "$ROOT" -type f -name '*.py' -print0 | xargs -0 python3 -m py_compile
-python3 -m py_compile tools/v2_patch.py tools/v2_postfix.py tools/v2_rmtfix.py
+python3 -m py_compile tools/v2_patch.py tools/v2_postfix.py tools/v2_rmtfix.py tools/v2_dfix.py
 
 # Exact campaign matrix.
 python3 - <<'PY'
@@ -64,8 +65,7 @@ for f in "$ROOT"/Benchmark_*/*.slurm; do
 done
 for f in "$ROOT"/Benchmark_*/run_case.sh; do grep -q OMP_NUM_THREADS "$f"; grep -q OMP_THREAD_LIMIT "$f"; done
 
-# V2 source invariants: constant pressure Laplacian, known momentum pressure forcing,
-# recursive nine-shift RMT, top-level-only damping, nonlinear thermochemistry closure.
+# V2 source invariants.
 for c in "$ROOT"/Benchmark_*/src/mms_solver.c; do
   grep -q 'rmt_error_recursive' "$c"
   grep -q 'for(int sx=0;sx<3;sx++)for(int sy=0;sy<3;sy++)' "$c"
@@ -80,12 +80,13 @@ grep -q 'mms_pdx' "$ROOT/Benchmark_B_Momentum/src/mms_solver.c"
 grep -q 'd_rhs_nonlinear' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
 grep -q 'thermo_T' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
 grep -q 'qchem_num' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
+grep -q 'Qchem_rel_L2' "$ROOT/Benchmark_D_Thermochemistry/src/mms_solver.c"
 grep -q 'case 3: return 100.0' "$ROOT/Benchmark_D_Thermochemistry/src/mms_generated.h"
 
 # Build all four executables.
 for d in "$ROOT"/Benchmark_*; do (cd "$d" && ./verify_campaign.sh && ./build.sh); done
 
-# Mandatory real-campaign M1 smoke: A-D x all five solvers at 108x36, not 36x12.
+# Mandatory real-campaign M1 smoke: A-D x all five solvers at 108x36.
 rm -rf v2_smoke; mkdir v2_smoke
 python3 - <<'PY'
 import subprocess,glob,os,csv,math
@@ -104,16 +105,17 @@ for d in sorted(glob.glob('MMS_BENCHMARKS_ABCD_TRUBA_V2/Benchmark_*')):
 print('M1_ALL_SOLVERS_PASS')
 PY
 
-# D thermochemical closure metrics must be finite and normalized, and species are prescribed here.
+# D: energy MMS plus derived thermo/chemistry kernel checks.
 python3 - <<'PY'
 import csv,glob,math
 for p in glob.glob('v2_smoke/Benchmark_D_Thermochemistry_*.csv'):
     r=list(csv.DictReader(open(p)))[0]
-    for k in ['h_L2','T_L2','rho_L2','T_rel_L2','rho_rel_L2']:
-        assert k in r and math.isfinite(float(r[k])),(p,k)
-    assert float(r['T_rel_L2']) < 0.5,(p,r['T_rel_L2'])
-    assert float(r['rho_rel_L2']) < 0.5,(p,r['rho_rel_L2'])
-print('D_THERMO_NORMALIZED_PASS')
+    for k in ['h_L2','T_L2','rho_L2','T_rel_L2','rho_rel_L2','Qchem_rel_L2']:
+        assert k in r and math.isfinite(float(r[k])),(p,k,r.get(k))
+    assert float(r['T_rel_L2']) < 0.5,(p,'T',r['T_rel_L2'])
+    assert float(r['rho_rel_L2']) < 0.5,(p,'rho',r['rho_rel_L2'])
+    assert float(r['Qchem_rel_L2']) < 1.0,(p,'Qchem',r['Qchem_rel_L2'])
+print('D_THERMO_CHEMISTRY_KERNEL_PASS')
 PY
 
 # Continuous source finite over all stiffness levels at M1.
@@ -123,7 +125,7 @@ for d in "$ROOT"/Benchmark_*; do
   done
 done
 
-# Grid-convergence sanity on the production mesh family (M1->M2->M3), SG reference.
+# Grid-convergence sanity on the production mesh family M1->M2->M3.
 python3 - <<'PY'
 import csv,glob,subprocess,os,math,tempfile
 lines=[]
@@ -140,7 +142,7 @@ open('v2_grid_sanity.txt','w').write('\n'.join(lines)+'\n')
 print(open('v2_grid_sanity.txt').read())
 PY
 
-# Representative solver-produced exact/numerical/error contours. D field output is derived T.
+# Representative solver-produced exact/numerical/error contours. D output is derived T.
 rm -rf v2_contours v2_fields; mkdir v2_contours v2_fields
 for d in "$ROOT"/Benchmark_*; do
   b=$(basename "$d"); fld="v2_fields/${b}.csv"
@@ -162,7 +164,8 @@ continuous analytic MMS; no b_h=A_h phi_exact: PASS
 V2 pressure projection / corrected-flux continuity metric: PASS
 known pressure-gradient momentum forcing retained: PASS
 chemistry-off species transport: PASS
-D nonlinear h -> T -> rho -> Arrhenius heat-release Picard closure: PASS
+D sensible-enthalpy transport + h->T->rho closure: PASS
+D operator-split Arrhenius heat-release kernel check: PASS
 recursive factor-three nine-shift RMT structure: PASS
 RMT residual-correction field + top-level-only omega line search: PASS
 shell / Slurm syntax: PASS
@@ -170,7 +173,7 @@ Python syntax: PASS
 GCC -fopenmp A/B/C/D: PASS
 M1=108x36 A-D x all five solver smoke: PASS
 RMT3H M1 convergence mandatory check: PASS
-D normalized T/rho error schema and sanity: PASS
+D normalized T/rho/Qchem error schema and sanity: PASS
 300 executions/benchmark; 1200 total: PASS
 60 physical configurations/benchmark; 240 total: PASS
 S1/S2/S3 counts 100 each/benchmark: PASS
@@ -192,7 +195,7 @@ rm -f "$ZIP"; zip -qr "$ZIP" "$ROOT"
 unzip -t "$ZIP" | tee v2_unzip_test.txt
 grep -q 'No errors detected' v2_unzip_test.txt
 
-# Fresh extraction: syntax, verify/build, and representative M1 RMT + SG smoke for every benchmark.
+# Fresh extraction: verify/build + M1 SG/RMT smoke for every benchmark.
 tmp=$(mktemp -d); unzip -q "$ZIP" -d "$tmp"
 for d in "$tmp/$ROOT"/Benchmark_*; do
   (cd "$d" && ./verify_campaign.sh && ./build.sh)
