@@ -3,7 +3,10 @@ name: Build MMS package fast
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/build-mms-package-fast.yml']
+    paths:
+      - '.github/workflows/build-mms-package-fast.yml'
+      - 'tools/generate_mms_package.py'
+      - 'tools/postprocess_package.py'
   workflow_dispatch:
 
 permissions:
