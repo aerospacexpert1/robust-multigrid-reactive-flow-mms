@@ -1,26 +1,31 @@
-MMS_BENCHMARKS_ABCD_TRUBA_V1 — GitHub Actions validation
-shell syntax: PASS
+MMS_BENCHMARKS_ABCD_TRUBA_V1 — FINAL VALIDATION
+================================================
+continuous analytic MMS (no b_h=A_h phi_exact): PASS
+shell / Slurm syntax: PASS
 Python syntax: PASS
 GCC -fopenmp A/B/C/D: PASS
-A/B/C/D smoke: PASS
-all five solvers smoke: PASS
-manifest: 300 executions/benchmark, 1200 total: PASS
-physical configurations: 60/benchmark, 240 total: PASS
-S1/S2/S3 counts: 100 each/benchmark: PASS
-T1/T2/T4/T16 counts: 75 each/benchmark: PASS
-M1..M5 counts: 60 each/benchmark: PASS
-solver counts: 60 each/benchmark: PASS
-OMP mapping 1/2/4/16: PASS
-Slurm allocation cpus-per-task=56: PASS
+all five solver smoke on A/B/C/D: PASS
+per-variable error summary schema: PASS
+300 solver executions per benchmark / 1200 total: PASS
+60 physical configurations per benchmark / 240 total: PASS
+S1/S2/S3 counts = 100 each per benchmark: PASS
+T1/T2/T4/T16 counts = 75 each per benchmark: PASS
+M1..M5 counts = 60 each per benchmark: PASS
+SG_RBGS/MG2V/MG2W/MG3V/RMT3H counts = 60 each per benchmark: PASS
+OMP manifest mapping 1/2/4/16: PASS
+Slurm nodes=1 ntasks=1 cpus-per-task=56: PASS
 SLURM_SUBMIT_DIR fix: PASS
-continuous MMS source finite sanity S1-S3: PASS
+MG2 source transfer invariants: PASS
+MG3 uploaded-source factor-three transfer invariants: PASS
+RMT 3x3 shifted family / repeats=2 / coarseSweeps=48 / omega=0.005 / postSmooth=3: PASS
+continuous source finite sanity S1-S3: PASS
 grid-convergence sanity: PASS
-exact/numerical/error contour generation: PASS
-A-D exact contour distinctness: PASS
+solver-produced exact/numerical/error field contours: PASS
+A-D exact contour distinction: PASS
 output isolation: PASS
-Benchmark_A_Pressure_Projection L2=[0.009299665062441, 0.002166967964665, 0.0005251389601284] aggregate_order=2.07320
-Benchmark_B_Momentum L2=[0.01395533223717, 0.007586263761041, 0.003958783873555] aggregate_order=0.90884
-Benchmark_C_Species_Transport L2=[0.001451643732573, 0.0008161425190783, 0.0004344821284845] aggregate_order=0.87016
-Benchmark_D_Thermochemistry L2=[89791.51776735, 52415.28152706, 28477.99496211] aggregate_order=0.82837
+Benchmark_A_Pressure_Projection L2=[0.009299665062441, 0.002166967964665, 0.0005251389601284] aggregate_order=2.073204
+Benchmark_B_Momentum L2=[0.01395533223717, 0.007586263761041, 0.003958783873555] aggregate_order=0.908844
+Benchmark_C_Species_Transport L2=[0.001451643732573, 0.0008161425190783, 0.0004344821284845] aggregate_order=0.870159
+Benchmark_D_Thermochemistry L2=[89791.51776735, 52415.28152706, 28477.99496211] aggregate_order=0.828366
 ZIP integrity: PASS
-fresh extraction verify/build/smoke: PASS
+fresh extraction verify/build/all-solver smoke: PASS
