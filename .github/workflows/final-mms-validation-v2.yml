@@ -27,9 +27,7 @@ jobs:
       - name: Install validation dependencies
         run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
       - name: Generate and run full V2 validation
-        run: |
-          sed -i '/python3 tools\/v2_patch.py/a python3 tools/v2_postfix.py' tools/final_validate.sh
-          bash tools/final_validate.sh
+        run: bash tools/final_validate.sh
       - name: Upload validated V2 package
         uses: actions/upload-artifact@v4
         with:
