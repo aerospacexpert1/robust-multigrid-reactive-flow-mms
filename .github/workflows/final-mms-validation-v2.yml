@@ -6,6 +6,11 @@ on:
     paths:
       - 'tools/**'
       - '.github/workflows/final-mms-validation-v2.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/**'
+      - '.github/workflows/final-mms-validation-v2.yml'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +36,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish validated V2 ZIP and report on branch
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           mkdir -p dist
