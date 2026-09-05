@@ -14,7 +14,30 @@ for h in root.glob('Benchmark_*/src/mms_generated.h'):
             elif n=='k': body='return mms_diff(x,y,s);'
             else: body='return 0.0;'
             add.append(f'static inline double mms_{n}(double x,double y,int s){{(void)x;(void)y;(void)s;{body}}}')
+    # Predictor pressure-gradient split used by Benchmark B.  p*=0.12 cos(pi*x/3) sin(2*pi*y).
+    if 'Benchmark_B_' in str(h):
+        add.append('static inline double mms_dpdx(double x,double y,int s){(void)s;return -0.04*M_PI*sin(M_PI*x/3.0)*sin(2.0*M_PI*y);}')
+        add.append('static inline double mms_dpdy(double x,double y,int s){(void)s;return 0.24*M_PI*cos(M_PI*x/3.0)*cos(2.0*M_PI*y);}')
     h.write_text(txt+'\n'+'\n'.join(add)+'\n')
+
+# Preserve the production-style equation splitting in the isolated MMS driver.
+# B: total continuous MMS source includes grad(p); the momentum predictor matrix is convection-diffusion,
+#    therefore grad(p) is moved back to the RHS separately.
+# D: the generated src_Y/source_h are the MMS correction terms; physical Arrhenius/heat sources are
+#    added back so the discrete transport block solves physical source + MMS correction.
+for c in root.glob('Benchmark_*/src/mms_solver.c'):
+    s=c.read_text()
+    if 'Benchmark_B_' in str(c):
+        old="if(BENCH_ID=='B') return var=='u'?mms_src_u(x,y,st):mms_src_v(x,y,st);"
+        new="if(BENCH_ID=='B') return var=='u'?(mms_src_u(x,y,st)-mms_dpdx(x,y,st)):(mms_src_v(x,y,st)-mms_dpdy(x,y,st));"
+        assert old in s
+        s=s.replace(old,new)
+    if 'Benchmark_D_' in str(c):
+        old="if(var=='f')return mms_src_YF(x,y,st); if(var=='o')return mms_src_YO(x,y,st); if(var=='p')return mms_src_YP(x,y,st); return mms_src_h(x,y,st);"
+        new="if(var=='f')return mms_src_YF(x,y,st)-2.0*mms_rate(x,y,st); if(var=='o')return mms_src_YO(x,y,st)-mms_rate(x,y,st); if(var=='p')return mms_src_YP(x,y,st)+2.0*mms_rate(x,y,st); return mms_src_h(x,y,st)+2.5e7*mms_rate(x,y,st);"
+        assert old in s
+        s=s.replace(old,new)
+    c.write_text(s)
 
 plot=r'''#!/usr/bin/env python3
 import argparse, math
