@@ -28,7 +28,9 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
       - name: Generate and run full V2 validation
         run: |
+          python3 -m py_compile tools/v2_budgetfix.py
           python3 tools/v2_generator_fix.py
+          sed -i '/python3 tools\/v2_bfix.py/a python3 tools/v2_budgetfix.py' tools/final_validate.sh
           bash tools/final_validate.sh
       - name: Upload validated V2 package
         uses: actions/upload-artifact@v4
