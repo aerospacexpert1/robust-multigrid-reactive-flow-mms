@@ -1,0 +1,36 @@
+name: Final MMS A-D validation v2
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
+      - name: Run complete final validation
+        run: bash tools/final_validate.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MMS_BENCHMARKS_ABCD_TRUBA_V1
+          path: MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
+          if-no-files-found: error
+      - name: Publish validated artifact and report
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V1.zip dist/MMS_BENCHMARKS_ABCD_TRUBA_V1.zip
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V1/VALIDATION_REPORT.txt dist/VALIDATION_REPORT.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist
+          git commit -m 'Publish final validated MMS A-D artifact [skip ci]' || true
+          git push
