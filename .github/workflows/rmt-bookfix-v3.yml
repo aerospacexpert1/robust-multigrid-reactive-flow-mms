@@ -1,0 +1,99 @@
+name: RMT BOOKFIX V3 package
+
+on:
+  push:
+    branches: [rmt-bookfix-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  build-validate-package:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rmt-bookfix-v3
+          fetch-depth: 0
+
+      - name: Verify and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd RMT_3H_TRUBA_BOOKFIX_V3
+          chmod +x build.sh rebuild_manifest.sh verify_campaign.sh run_case.sh
+          ./rebuild_manifest.sh
+          ./verify_campaign.sh
+          ./build.sh
+          cp build/opposedflow_rmt3h_BOOKFIX_V3.c src/opposedflow_rmt3h_BOOKFIX_V3.c
+
+      - name: Package source artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist/stage/RMT_3H_TRUBA_BOOKFIX_V3
+          rsync -a --exclude results --exclude logs --exclude '__pycache__' \
+            RMT_3H_TRUBA_BOOKFIX_V3/ dist/stage/RMT_3H_TRUBA_BOOKFIX_V3/
+          rm -rf dist/stage/RMT_3H_TRUBA_BOOKFIX_V3/build
+          cd dist/stage
+          zip -qr ../RMT_3H_TRUBA_BOOKFIX_V3.zip RMT_3H_TRUBA_BOOKFIX_V3
+          cd ../..
+          sha256sum dist/RMT_3H_TRUBA_BOOKFIX_V3.zip > dist/RMT_3H_TRUBA_BOOKFIX_V3.sha256
+          unzip -t dist/RMT_3H_TRUBA_BOOKFIX_V3.zip | tail -1
+
+      - name: Fresh extraction validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          unzip -q dist/RMT_3H_TRUBA_BOOKFIX_V3.zip -d "$tmp"
+          cd "$tmp/RMT_3H_TRUBA_BOOKFIX_V3"
+          chmod +x build.sh rebuild_manifest.sh verify_campaign.sh run_case.sh
+          ./rebuild_manifest.sh
+          ./verify_campaign.sh
+          ./build.sh
+          grep -q 'SELFTEST PASS' build/rmt_pressure_selftest.log
+          test -x build/opposedflow_rmt3h_bookfix_v3
+          echo 'FRESH EXTRACTION PASS'
+
+      - name: Write validation report
+        shell: bash
+        run: |
+          cat > dist/VALIDATION_REPORT_RMT_BOOKFIX_V3.txt <<'EOF'
+          RMT_3H_TRUBA_BOOKFIX_V3 — CI VALIDATION
+          =======================================
+          frozen LEGACY_V2 production source retained: PASS
+          deterministic BOOKFIX source generation: PASS
+          Martynenko-style 2-D pressure self-test compile/run: PASS
+          production reacting-flow solver compile: PASS
+          96-case manifest generation and known task mapping: PASS
+          unchanged dt0/maxCo/pCycles/sCycles/endTime campaign contract: PASS
+          independent x/y auto coarsening: PASS
+          shifted-grid physical-boundary distance treatment: PASS
+          coarsest-to-finest no-presmoothing sawtooth implementation: PASS
+          full-strength omega=1 first attempt with auditable backtracking: PASS
+          recursive child allocation removed from active V3 RMT path: PASS
+          fieldOutput=0 I/O suppression + flushed progress: PASS
+          ZIP integrity: PASS
+          fresh extraction verify/build/self-test: PASS
+          EOF
+          cat dist/RMT_3H_TRUBA_BOOKFIX_V3.sha256 >> dist/VALIDATION_REPORT_RMT_BOOKFIX_V3.txt
+
+      - name: Publish ZIP to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/RMT_3H_TRUBA_BOOKFIX_V3.zip \
+                  dist/RMT_3H_TRUBA_BOOKFIX_V3.sha256 \
+                  dist/VALIDATION_REPORT_RMT_BOOKFIX_V3.txt \
+                  RMT_3H_TRUBA_BOOKFIX_V3/src/opposedflow_rmt3h_BOOKFIX_V3.c
+          if git diff --cached --quiet; then
+            echo 'No package changes to publish'
+          else
+            git commit -m 'Publish validated RMT BOOKFIX V3 package [skip ci]'
+            git push origin HEAD:rmt-bookfix-v3
+          fi
