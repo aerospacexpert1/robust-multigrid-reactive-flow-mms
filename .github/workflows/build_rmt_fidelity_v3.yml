@@ -30,7 +30,7 @@ jobs:
           sed -n '30p' campaign_manifest.csv | grep -q '28,FLOW_NOMINAL_M4_T1,FLOW,NOMINAL,M4,864,288,1'
           sed -n '42p' campaign_manifest.csv | grep -q '40,FLOW_HIGH_M3_T1,FLOW,HIGH,M3,432,144,1'
           sed -n '46p' campaign_manifest.csv | grep -q '44,FLOW_HIGH_M4_T1,FLOW,HIGH,M4,864,288,1'
-          grep -q 'RMT_3H_FIDELITY_V3' VERSION.txt
+          grep -q 'RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3' VERSION.txt
           grep -q '"physics_changed": false' PATCH_MANIFEST.json
           grep -q '"benchmark_matrix_changed": false' PATCH_MANIFEST.json
 
@@ -76,7 +76,7 @@ jobs:
             2>&1 | tee smoke.log
           grep -q 'RMT_RUN_SUMMARY' smoke.log
           grep -q 'RMT_DIAGNOSTICS' smoke.log
-          grep -q 'final_time=4.9999999999999998e-07\|final_time=5.000000000000000e-07\|final_time=5e-07' smoke.log
+          grep -Eq 'final_time=(4\.9999999999999998e-07|5\.000000000000000e-07|5e-07)' smoke.log
           test ! -d vtk
           test -z "$(find . -maxdepth 1 -name 'centerline_*.csv' -print -quit)"
 
