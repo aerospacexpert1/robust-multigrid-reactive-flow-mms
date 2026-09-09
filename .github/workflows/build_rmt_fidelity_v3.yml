@@ -1,0 +1,111 @@
+name: Build RMT Fidelity V3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rmt-fidelity-v3
+    paths:
+      - tools/build_rmt_fidelity_v3.py
+      - .github/workflows/build_rmt_fidelity_v3.yml
+
+jobs:
+  build-validate-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate V3 package
+        run: |
+          set -euxo pipefail
+          python3 tools/build_rmt_fidelity_v3.py
+
+      - name: Validate campaign manifest
+        working-directory: dist/RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+        run: |
+          set -euxo pipefail
+          test "$(($(wc -l < campaign_manifest.csv)-1))" -eq 96
+          sed -n '30p' campaign_manifest.csv | grep -q '28,FLOW_NOMINAL_M4_T1,FLOW,NOMINAL,M4,864,288,1'
+          sed -n '42p' campaign_manifest.csv | grep -q '40,FLOW_HIGH_M3_T1,FLOW,HIGH,M3,432,144,1'
+          sed -n '46p' campaign_manifest.csv | grep -q '44,FLOW_HIGH_M4_T1,FLOW,HIGH,M4,864,288,1'
+          grep -q 'RMT_3H_FIDELITY_V3' VERSION.txt
+          grep -q '"physics_changed": false' PATCH_MANIFEST.json
+          grep -q '"benchmark_matrix_changed": false' PATCH_MANIFEST.json
+
+      - name: Build solver
+        working-directory: dist/RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+        run: |
+          set -euxo pipefail
+          ./build.sh
+          test -x build/opposedflow_rmt3h
+
+      - name: Source fidelity assertions
+        working-directory: dist/RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+        run: |
+          set -euxo pipefail
+          grep -q 'static double g_rmtOmega = 1.0;' src/opposedflow_rmt3h.c
+          grep -q 'Martynenko (2017), Eq. 2.17' src/opposedflow_rmt3h.c
+          grep -q 'Martynenko (2017), Eq. 2.18' src/opposedflow_rmt3h.c
+          grep -q 'Martynenko (2017), Eq. 2.19' src/opposedflow_rmt3h.c
+          grep -q 'Martynenko (2017), Eq. 2.20' src/opposedflow_rmt3h.c
+          grep -q 'rmt_can_coarsen_dim' src/opposedflow_rmt3h.c
+          grep -q 'rmt_workspace_current' src/opposedflow_rmt3h.c
+          grep -q 'RMT_DIAGNOSTICS' src/opposedflow_rmt3h.c
+          grep -q -- '-rmtLevels 0' run_case.sh
+          grep -q -- '-rmtOmega 1.0' run_case.sh
+
+      - name: Short reacting-flow smoke test
+        working-directory: dist/RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+        run: |
+          set -euxo pipefail
+          rm -rf smoke
+          mkdir smoke
+          cd smoke
+          export OMP_NUM_THREADS=2
+          export OMP_THREAD_LIMIT=2
+          export OMP_DYNAMIC=FALSE
+          ../build/opposedflow_rmt3h \
+            -Nx 54 -Ny 18 \
+            -end 5.0e-7 -dt 1.0e-7 -maxCo 0.05 \
+            -vIn 0.05 -arrA 1.0e7 -arrBeta 5 -arrTa 1000 \
+            -pCycles 1 -sCycles 1 \
+            -rmtLevels 0 -rmtPost 3 -rmtCoarseSweeps 16 -rmtCoarseRepeats 1 -rmtOmega 1.0 \
+            -fieldOutput 0 \
+            2>&1 | tee smoke.log
+          grep -q 'RMT_RUN_SUMMARY' smoke.log
+          grep -q 'RMT_DIAGNOSTICS' smoke.log
+          grep -q 'final_time=4.9999999999999998e-07\|final_time=5.000000000000000e-07\|final_time=5e-07' smoke.log
+          test ! -d vtk
+          test -z "$(find . -maxdepth 1 -name 'centerline_*.csv' -print -quit)"
+
+      - name: Check package for accidental results
+        working-directory: dist/RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+        run: |
+          set -euxo pipefail
+          rm -rf smoke build results logs campaign_summary.csv
+          test -f campaign_manifest.csv
+          test -f src/opposedflow_rmt3h.c
+          test -f src/opposedflow_rmt3h_ORIGINAL_V2.c
+          test -f README_FAIR_COMPARISON.md
+          test -f PATCH_MANIFEST.json
+
+      - name: Create and integrity-test ZIP
+        run: |
+          set -euxo pipefail
+          cd dist
+          zip -qr ../RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3.zip RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+          cd ..
+          unzip -t RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3.zip
+          sha256sum RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3.zip | tee RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3.sha256
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3
+          path: |
+            RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3.zip
+            RMT_3H_TRUBA_96CASE_TRUBA_FIDELITY_V3.sha256
+          if-no-files-found: error
+          retention-days: 90
