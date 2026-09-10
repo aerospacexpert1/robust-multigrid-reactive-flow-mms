@@ -27,8 +27,6 @@ for token in required:
     if token not in s:
         raise SystemExit(f"BOOKFIX patch refused: expected token not found: {token}")
 
-# Insert the book-faithful 2-D index-mapped RMT implementation immediately before the
-# production pressure solve, after the fine-grid residual routines are already defined.
 marker = "static void solve_pressure_poisson(const Grid *g, const Phys *ph, Fields *f, int iters, double relaxP) {"
 if '#include "rmt_book2d_impl.h"' not in s:
     s = s.replace(marker, '#include "rmt_book2d_impl.h"\n\n' + marker, 1)
@@ -98,8 +96,6 @@ new_pressure = r'''static void solve_pressure_poisson(const Grid *g, const Phys 
         if (!accepted) {
             ++g_rmtBookRejects;
             g_rmtBookLastAcceptedOmega=0.0;
-            /* Conservative safety fallback. It is counted explicitly and therefore cannot
-               silently make the corrected RMT look better in the thesis comparison. */
             for (int sweep=0; sweep<2; ++sweep) {
                 for (int color=0; color<2; ++color) {
 #ifdef _OPENMP
@@ -131,8 +127,6 @@ if not m:
     raise SystemExit("BOOKFIX patch refused: could not isolate solve_pressure_poisson")
 s = s[:m.start()] + new_pressure + "\nstatic void correct_velocity" + s[m.end():]
 
-# Make progress visible without enabling field I/O.  The previous code printed only at the
-# write interval and then wrote VTK/CSV even when -fieldOutput 0 was requested.
 progress_pat = re.compile(
     r"time \+= dt; double Co = compute_max_co\(&g,&f,dt\); double dtCo=\(Co>1e-12\)\?\(0\.95\*c\.maxCo\*dt/Co\):\(1\.2\*dt\); double dtGrow=1\.2\*dt, dtMax=1e-4; dt=MIN\(dtMax,MIN\(dtCo,dtGrow\)\);\n"
     r"\s*if \(time >= nextWrite - 1e-14\) \{.*?nextWrite \+= c\.writeInterval;\n\s*\}", re.S)
@@ -150,12 +144,13 @@ progress_new = r'''time += dt; double Co = compute_max_co(&g,&f,dt); double dtCo
             }
             nextWrite += c.writeInterval;
         }'''
-s2, n = progress_pat.subn(progress_new, s, count=1)
+# Use a callable replacement: re.sub otherwise interprets backslash escapes in
+# replacement text and turns the C string's \n into a literal source newline.
+s2, n = progress_pat.subn(lambda _m: progress_new, s, count=1)
 if n != 1:
     raise SystemExit(f"BOOKFIX patch refused: progress/output block matches={n}")
 s = s2
 
-# Add auditable end-of-run RMT diagnostics.  These are separate from the legacy summary parser.
 diag_anchor = '''    printf("Pressure RMT calls: %lld\\n",
            g_pressure_rmt_calls);
 '''
