@@ -4,7 +4,7 @@ Corrected Robust Multigrid Technique (RMT) pressure-solver campaign package for 
 
 ## Scientific comparison rule
 
-This package is generated from the **frozen V95 SG-RBGS campaign source** used by the SG/MG2V/MG2W/MG3V comparisons.  The generator replaces only the pressure linear solver and reporting labels.  `tools/audit_fairness.py` requires byte-identical bodies for the momentum predictor, pressure RHS, velocity/face-mass-flux correction, scalar transport, chemistry, thermophysical update, and the complete timed physical timestep loop.
+This package is generated from the **frozen V95 SG-RBGS campaign source** used by the SG/MG2V/MG2W/MG3V comparisons. The generator replaces only the pressure linear solver and pressure-solver reporting. `tools/audit_fairness.py` requires byte-identical bodies for the momentum predictor, pressure RHS, velocity/face-mass-flux correction, scalar transport, chemistry, thermophysical update, and the complete timed physical timestep loop.
 
 The campaign therefore keeps the same V95 physical/numerical settings as the existing in-house campaigns:
 
@@ -27,11 +27,16 @@ The campaign therefore keeps the same V95 physical/numerical settings as the exi
 - arithmetic control-volume restriction;
 - residue-class/index-mapped coarse-to-fine correction (no interpolation);
 - coarsest-to-finest sawtooth ordering, no presmoothing;
-- default 8 smoothing sweeps and 16 deepest-level sweeps;
+- production default **16 smoothing sweeps and 32 deepest-level sweeps**;
 - initial Uzawa/RMT correction factor = 1.0;
 - correction damping only by residual-based halving when needed;
 - **no hidden RBGS fallback**: if a safeguarded RMT correction cannot reduce the V95 pressure residual, the run aborts and is not marked complete;
+- failure to reach the frozen V95 pressure tolerance within the maximum cycle count is fatal;
 - reusable full-grid workspace; no per-child recursive allocation tree.
+
+### Why 16/32?
+
+The exact first V95 pressure solve was tested with the same M1/LOW campaign state. `post=8/coarse=16` stagnated and was rejected. `post=12/coarse=24` only just met the frozen `1e-4` relative tolerance (`9.49e-5`). `post=16/coarse=32` reached `3.22e-5` in 7 RMT cycles with full `omega=1`, zero backtracking and zero rejection, and subsequently passed the exact V95 reacting-flow smoke to `t=0.02`. Higher 24/48 and 32/64 variants also converged but add more smoothing work per cycle. The selected 16/32 setting is therefore the minimum tested power-of-two setting with a clear tolerance margin, rather than a per-case timing optimum.
 
 `backtrack_halvings` in diagnostics is the total number of omega halvings, not the number of pressure solves that backtracked.
 
@@ -83,6 +88,6 @@ The array is `0-95%3`, matching the previous campaign concurrency convention.
 
 ## Provenance
 
-`src/opposedflow_v95_frozen_sg_reference.c` is copied byte-for-byte from the repository's frozen SG-RBGS 96-case reference source.  It is never edited.  `tools/generate_rmt_v95.py` creates `build/opposedflow_rmt3h_v95_fair.c` deterministically.
+`src/opposedflow_v95_frozen_sg_reference.c` is copied byte-for-byte from the repository's frozen SG-RBGS 96-case reference source. It is never edited. `tools/generate_rmt_v95.py` plus `tools/finalize_generated_v95.py` create `build/opposedflow_rmt3h_v95_fair.c` deterministically.
 
 The legacy failed RMT source is intentionally not used as the production base because it differed from the frozen V95 projection/timestep sequence.
