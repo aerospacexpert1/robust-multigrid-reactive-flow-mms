@@ -9,8 +9,8 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 export OMP_DYNAMIC=false
 export OMP_PROC_BIND=close
 export OMP_PLACES=cores
-RMT_POST=${RMT_POST:-8}
-RMT_COARSE_SWEEPS=${RMT_COARSE_SWEEPS:-16}
+RMT_POST=${RMT_POST:-16}
+RMT_COARSE_SWEEPS=${RMT_COARSE_SWEEPS:-32}
 
 ./build/opposedflow_rmt3h_v95_fair \
   -Nx 108 -Ny 36 \
