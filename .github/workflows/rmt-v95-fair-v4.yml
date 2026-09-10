@@ -1,0 +1,53 @@
+name: RMT V95 Fair V4
+on:
+  push:
+    branches: [rmt-v95-fair-v4]
+    paths:
+      - 'RMT_3H_TRUBA_V95_FAIR_V4/**'
+      - '.github/workflows/rmt-v95-fair-v4.yml'
+  workflow_dispatch:
+
+jobs:
+  build-audit-smoke-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, fairness audit, pressure self-test
+        run: |
+          cd RMT_3H_TRUBA_V95_FAIR_V4
+          chmod +x build.sh smoke_local.sh rebuild_manifest.sh run_case.sh build_rmt.slurm run_one_case.slurm rmt_96_array.slurm
+          ./build.sh
+      - name: Exact V95 reacting-flow smoke through t=0.02
+        run: |
+          cd RMT_3H_TRUBA_V95_FAIR_V4
+          OMP_NUM_THREADS=4 ./smoke_local.sh
+      - name: Manifest audit
+        run: |
+          cd RMT_3H_TRUBA_V95_FAIR_V4
+          ./rebuild_manifest.sh
+          test "$(wc -l < campaign_manifest.csv)" -eq 97
+          sed -n '5p' campaign_manifest.csv | grep -q '^3,FLOW_INTENSITY__BC1_LOW_v005__M1_108x36__C16,'
+          sed -n '50p' campaign_manifest.csv | grep -q '^48,REACTION_STIFFNESS__S1_LOW_A1e7_Ta1000__M1_108x36__C1,'
+      - name: Create clean ZIP and fresh-extraction validation
+        run: |
+          rm -rf /tmp/rmtstage /tmp/rmtfresh
+          mkdir -p /tmp/rmtstage /tmp/rmtfresh
+          cp -a RMT_3H_TRUBA_V95_FAIR_V4 /tmp/rmtstage/
+          rm -rf /tmp/rmtstage/RMT_3H_TRUBA_V95_FAIR_V4/build \
+                 /tmp/rmtstage/RMT_3H_TRUBA_V95_FAIR_V4/smoke_output \
+                 /tmp/rmtstage/RMT_3H_TRUBA_V95_FAIR_V4/results
+          (cd /tmp/rmtstage && zip -qr "$GITHUB_WORKSPACE/RMT_3H_TRUBA_V95_FAIR_V4.zip" RMT_3H_TRUBA_V95_FAIR_V4)
+          unzip -q RMT_3H_TRUBA_V95_FAIR_V4.zip -d /tmp/rmtfresh
+          cd /tmp/rmtfresh/RMT_3H_TRUBA_V95_FAIR_V4
+          ./build.sh
+          ./rebuild_manifest.sh
+          test "$(wc -l < campaign_manifest.csv)" -eq 97
+          echo 'FRESH_EXTRACTION PASS'
+      - name: Upload validated ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMT_3H_TRUBA_V95_FAIR_V4
+          path: RMT_3H_TRUBA_V95_FAIR_V4.zip
+          if-no-files-found: error
+          retention-days: 30
