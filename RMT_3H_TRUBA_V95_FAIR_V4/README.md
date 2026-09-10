@@ -91,3 +91,36 @@ The array is `0-95%3`, matching the previous campaign concurrency convention.
 `src/opposedflow_v95_frozen_sg_reference.c` is copied byte-for-byte from the repository's frozen SG-RBGS 96-case reference source. It is never edited. `tools/generate_rmt_v95.py` plus `tools/finalize_generated_v95.py` create `build/opposedflow_rmt3h_v95_fair.c` deterministically.
 
 The legacy failed RMT source is intentionally not used as the production base because it differed from the frozen V95 projection/timestep sequence.
+
+
+## Campaign post-processing
+
+After or during the 96-case campaign, build one campaign table with:
+
+```bash
+python3 collect_summary.py
+```
+
+This writes:
+
+```text
+RMT_V95_campaign_summary.csv
+```
+
+It always follows the 96-row manifest and reports each case as `complete`, `failed`, `partial`, or `missing`. To require all 96 cases to be complete:
+
+```bash
+python3 collect_summary.py --require-complete
+```
+
+For 1/2/4/16-thread scaling based on the campaign compute timer:
+
+```bash
+python3 analyze_scaling.py
+```
+
+This writes:
+
+```text
+RMT_V95_scaling_summary.csv
+```
