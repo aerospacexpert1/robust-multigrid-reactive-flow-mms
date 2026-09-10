@@ -9,13 +9,15 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 export OMP_DYNAMIC=false
 export OMP_PROC_BIND=close
 export OMP_PLACES=cores
+RMT_POST=${RMT_POST:-8}
+RMT_COARSE_SWEEPS=${RMT_COARSE_SWEEPS:-16}
 
 ./build/opposedflow_rmt3h_v95_fair \
   -Nx 108 -Ny 36 \
   -end 0.02 -dt 1e-7 -dtMax 1e-4 \
   -vFuel 0.05 -vOx -0.05 \
   -threads "$OMP_NUM_THREADS" -caseId RMT_V95_FAIR_SMOKE \
-  -rmtLevels 0 -rmtPost 8 -rmtCoarseSweeps 16 -rmtOmega 1.0 \
+  -rmtLevels 0 -rmtPost "$RMT_POST" -rmtCoarseSweeps "$RMT_COARSE_SWEEPS" -rmtOmega 1.0 \
   -pCycles 500 -pRelTol 1e-4 -pAbsTol 1e-6 \
   -sCycles 4 -sSweeps 5 \
   -writeOutput 1 -write 0.02 -outputDir smoke_output \
@@ -26,6 +28,7 @@ export OMP_PLACES=cores
   2>&1 | tee smoke_output/smoke.log
 
 ! grep -q "RMT_PRESSURE_REJECT" smoke_output/smoke.log
+! grep -q "RMT_PRESSURE_NOT_CONVERGED" smoke_output/smoke.log
 grep -q '^Done\. Final time=0.02' smoke_output/smoke.log
 grep -q 'RMT_BOOK_DIAGNOSTICS' smoke_output/smoke.log
 [[ -s smoke_output/summary.csv ]]
@@ -35,7 +38,6 @@ import csv, math
 p='smoke_output/summary.csv'
 with open(p,newline='') as f:
     row=next(csv.DictReader(f))
-
 def num(k): return float(row[k])
 assert abs(num('final_time_s')-0.02) < 1e-12, row['final_time_s']
 assert int(float(row['time_steps'])) < 10000, row['time_steps']
