@@ -1,0 +1,17 @@
+RMT_3H_TRUBA_BOOKFIX_V3 — CI VALIDATION
+=======================================
+frozen LEGACY_V2 production source retained: PASS
+deterministic BOOKFIX source generation: PASS
+Martynenko-style 2-D pressure self-test compile/run: PASS
+production reacting-flow solver compile: PASS
+96-case manifest generation and known task mapping: PASS
+unchanged dt0/maxCo/pCycles/sCycles/endTime campaign contract: PASS
+independent x/y auto coarsening: PASS
+shifted-grid physical-boundary distance treatment: PASS
+coarsest-to-finest no-presmoothing sawtooth implementation: PASS
+full-strength omega=1 first attempt with auditable backtracking: PASS
+recursive child allocation removed from active V3 RMT path: PASS
+fieldOutput=0 I/O suppression + flushed progress: PASS
+ZIP integrity: PASS
+fresh extraction verify/build/self-test: PASS
+0ba07e250f4ab125ad9ad668a9b5eddc4893d7c4866dfdb7ff2aec6a291dd4d2  dist/RMT_3H_TRUBA_BOOKFIX_V3.zip
