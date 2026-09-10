@@ -33,8 +33,10 @@ P_CYCLES=${P_CYCLES:-500}
 P_REL_TOL=${P_REL_TOL:-1e-4}
 P_ABS_TOL=${P_ABS_TOL:-1e-6}
 RMT_LEVELS=${RMT_LEVELS:-0}
-RMT_POST=${RMT_POST:-8}
-RMT_COARSE_SWEEPS=${RMT_COARSE_SWEEPS:-16}
+# Diagnostic campaign: 8 failed the first exact V95 pressure solve; 12 only barely
+# met 1e-4; 16 reached 3.22e-5 with omega=1 and no backtracking and passed t=0.02.
+RMT_POST=${RMT_POST:-16}
+RMT_COARSE_SWEEPS=${RMT_COARSE_SWEEPS:-32}
 RMT_OMEGA=${RMT_OMEGA:-1.0}
 
 cat > "$run_dir/parameters.txt" <<PARAMS
@@ -128,7 +130,7 @@ valid=1
 [[ -s "$out_dir/performance/final_pressure_cycle_history.csv" ]] || valid=0
 grep -q '^Done\.' "$run_dir/run.log" || valid=0
 grep -q 'RMT_BOOK_DIAGNOSTICS' "$run_dir/run.log" || valid=0
-if grep -q 'RMT_PRESSURE_REJECT' "$run_dir/run.log"; then valid=0; fi
+if grep -q -E 'RMT_PRESSURE_REJECT|RMT_PRESSURE_NOT_CONVERGED' "$run_dir/run.log"; then valid=0; fi
 
 if [[ $valid -eq 1 ]]; then
   touch "$run_dir/RUN_COMPLETE"
