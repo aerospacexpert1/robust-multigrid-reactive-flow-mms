@@ -16,12 +16,35 @@ jobs:
       - name: Build, fairness audit, pressure self-test
         run: |
           cd RMT_3H_TRUBA_V95_FAIR_V4
-          chmod +x build.sh smoke_local.sh rebuild_manifest.sh run_case.sh build_rmt.slurm run_one_case.slurm rmt_96_array.slurm
+          chmod +x build.sh smoke_local.sh rebuild_manifest.sh run_case.sh build_rmt.slurm run_one_case.slurm rmt_96_array.slurm tools/*.py
           ./build.sh
+      - name: First-pressure RMT smoothing diagnostic
+        run: |
+          cd RMT_3H_TRUBA_V95_FAIR_V4
+          export OMP_NUM_THREADS=4 OMP_DYNAMIC=false OMP_PROC_BIND=close OMP_PLACES=cores
+          set +e
+          for post in 8 12 16 24 32; do
+            coarse=$((2*post))
+            echo "===== DIAG post=$post coarse=$coarse ====="
+            ./build/opposedflow_rmt3h_v95_fair \
+              -Nx 108 -Ny 36 -end 1e-7 -dt 1e-7 -dtMax 1e-4 \
+              -vFuel 0.05 -vOx -0.05 -threads 4 -caseId DIAG_P${post} \
+              -rmtLevels 0 -rmtPost "$post" -rmtCoarseSweeps "$coarse" -rmtOmega 1 \
+              -pCycles 500 -pRelTol 1e-4 -pAbsTol 1e-6 \
+              -sCycles 4 -sSweeps 5 -writeOutput 0 -progressEvery 1 \
+              -A 1e7 -beta 5 -Ta 1000 \
+              -perfectGas 0 -variableCp 0 -sutherland 0 -rhoRelax 1 \
+              -rho 1 -mu 2e-5 -cp 1000 -Pr 0.7 -Sc 1 -HfF 3.571428571e6 \
+              > "diag_post_${post}.log" 2>&1
+            rc=$?
+            echo "DIAG_RESULT post=$post rc=$rc"
+            tail -12 "diag_post_${post}.log"
+          done
+          exit 0
       - name: Exact V95 reacting-flow smoke through t=0.02
         run: |
           cd RMT_3H_TRUBA_V95_FAIR_V4
-          OMP_NUM_THREADS=4 ./smoke_local.sh
+          OMP_NUM_THREADS=4 RMT_POST=16 RMT_COARSE_SWEEPS=32 ./smoke_local.sh
       - name: Manifest audit
         run: |
           cd RMT_3H_TRUBA_V95_FAIR_V4
