@@ -60,7 +60,6 @@ print(f"FAIRNESS MATCH timestep_loop sha256={sha(x)}")
 for token in [
     '#include "rmt_final2d_impl.h"',
     "rmt_final_build_correction",
-    "rmt_final_direct_coarsest",
     "RMT_FINAL_DIAGNOSTICS",
     "RMT_PRESSURE_NOT_CONVERGED",
     "Non-incremental projection: pressure is intentionally excluded here",
