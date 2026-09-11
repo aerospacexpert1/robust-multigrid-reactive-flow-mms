@@ -8,7 +8,7 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 export OMP_DYNAMIC=false
 export OMP_PROC_BIND=close
 export OMP_PLACES=cores
-RMT_SWEEPS=${RMT_SWEEPS:-4}
+RMT_SWEEPS=${RMT_SWEEPS:-16}
 
 rm -rf first_pressure_logs
 mkdir -p first_pressure_logs

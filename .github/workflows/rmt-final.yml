@@ -24,12 +24,12 @@ jobs:
       - name: Exact frozen-V95 first-pressure matrix including former M4 failures
         run: |
           cd "RMT FINAL"
-          OMP_NUM_THREADS=4 RMT_SWEEPS=4 ./tests/first_pressure_matrix.sh
+          OMP_NUM_THREADS=4 RMT_SWEEPS=16 ./tests/first_pressure_matrix.sh
 
       - name: Exact frozen-V95 reacting-flow smoke through t=0.02
         run: |
           cd "RMT FINAL"
-          OMP_NUM_THREADS=4 RMT_SWEEPS=4 ./smoke_local.sh
+          OMP_NUM_THREADS=4 RMT_SWEEPS=16 ./smoke_local.sh
 
       - name: Manifest audit
         run: |

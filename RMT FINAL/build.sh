@@ -25,8 +25,16 @@ echo "[3/5] Compile RMT mesh-ladder self-test"
 gcc -O3 -march=native -std=c11 -Wall -Wextra -Wpedantic -fopenmp \
   tests/rmt_pressure_selftest.c -lm -o build/rmt_pressure_selftest
 
-echo "[4/5] Run boundary-CV + 108/216/432/864 mesh-ladder self-test"
-RMT_TEST_SWEEPS=${RMT_TEST_SWEEPS:-4} \
+echo "[4/5] Diagnose and validate boundary-CV + 108/216/432/864 mesh ladder"
+for sw in 4 8 16; do
+  echo "===== MESH LADDER DIAGNOSTIC sweeps=$sw ====="
+  set +e
+  RMT_TEST_SWEEPS="$sw" ./build/rmt_pressure_selftest | tee "build/rmt_pressure_selftest_s${sw}.log"
+  rc=${PIPESTATUS[0]}
+  set -e
+  echo "MESH_LADDER_DIAGNOSTIC sweeps=$sw rc=$rc"
+done
+RMT_TEST_SWEEPS=${RMT_TEST_SWEEPS:-16} \
   ./build/rmt_pressure_selftest | tee build/rmt_pressure_selftest.log
 grep -q "BOUNDARY_CV_RESTRICTION PASS" build/rmt_pressure_selftest.log
 grep -q "SELFTEST PASS" build/rmt_pressure_selftest.log

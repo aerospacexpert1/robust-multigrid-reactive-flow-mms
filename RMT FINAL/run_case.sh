@@ -41,7 +41,7 @@ P_ABS_TOL=${P_ABS_TOL:-1e-6}
 
 # RMT FINAL has one RMT tuning knob: postsmoothing sweep count.
 RMT_LEVELS=${RMT_LEVELS:-0}
-RMT_SMOOTH_SWEEPS=${RMT_SMOOTH_SWEEPS:-4}
+RMT_SMOOTH_SWEEPS=${RMT_SMOOTH_SWEEPS:-16}
 RMT_OMEGA=${RMT_OMEGA:-1.0}
 
 cat > "$run_dir/parameters.txt" <<PARAMS

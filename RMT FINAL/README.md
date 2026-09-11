@@ -50,7 +50,7 @@ See `DESIGN_NOTES.md` for the derivation and source comparison.
 - frozen V95 pressure tolerances: relTol=1e-4, absTol=1e-6.
 
 The only normal RMT tuning control is the number of postsmoothing sweeps.
-The campaign default is `RMT_SMOOTH_SWEEPS=4` on every mesh.
+The campaign default is `RMT_SMOOTH_SWEEPS=16` on every mesh.
 
 ## Build and validation
 
