@@ -1,0 +1,64 @@
+name: RMT FINAL
+
+on:
+  push:
+    branches: [rmt-final, main]
+    paths:
+      - 'RMT FINAL/**'
+      - '.github/workflows/rmt-final.yml'
+  workflow_dispatch:
+
+jobs:
+  build-audit-validate-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build, fairness audit, boundary-CV and mesh-ladder tests
+        run: |
+          cd "RMT FINAL"
+          chmod +x build.sh smoke_local.sh rebuild_manifest.sh run_case.sh                    build_rmt.slurm run_one_case.slurm rmt_96_array.slurm                    submit_gated_96.sh tests/first_pressure_matrix.sh tools/*.py
+          ./build.sh
+
+      - name: Exact frozen-V95 first-pressure matrix including former M4 failures
+        run: |
+          cd "RMT FINAL"
+          OMP_NUM_THREADS=4 RMT_SWEEPS=4 ./tests/first_pressure_matrix.sh
+
+      - name: Exact frozen-V95 reacting-flow smoke through t=0.02
+        run: |
+          cd "RMT FINAL"
+          OMP_NUM_THREADS=4 RMT_SWEEPS=4 ./smoke_local.sh
+
+      - name: Manifest audit
+        run: |
+          cd "RMT FINAL"
+          ./rebuild_manifest.sh
+          test "$(wc -l < campaign_manifest.csv)" -eq 97
+          sed -n '5p' campaign_manifest.csv | grep -q '^3,FLOW_INTENSITY__BC1_LOW_v005__M1_108x36__C16,'
+          sed -n '49p' campaign_manifest.csv | grep -q '^47,FLOW_INTENSITY__BC3_HIGH_v020__M4_864x288__C16,'
+          sed -n '97p' campaign_manifest.csv | grep -q '^95,REACTION_STIFFNESS__S3_HIGH_A1e9_Ta100__M4_864x288__C16,'
+
+      - name: Create clean ZIP and fresh-extraction validation
+        run: |
+          rm -rf /tmp/rmtfinal-stage /tmp/rmtfinal-fresh
+          mkdir -p /tmp/rmtfinal-stage /tmp/rmtfinal-fresh
+          cp -a "RMT FINAL" /tmp/rmtfinal-stage/
+          rm -rf "/tmp/rmtfinal-stage/RMT FINAL/build"                  "/tmp/rmtfinal-stage/RMT FINAL/smoke_output"                  "/tmp/rmtfinal-stage/RMT FINAL/first_pressure_logs"                  "/tmp/rmtfinal-stage/RMT FINAL/results"
+          (cd /tmp/rmtfinal-stage && zip -qr "$GITHUB_WORKSPACE/RMT_FINAL.zip" "RMT FINAL")
+          unzip -q RMT_FINAL.zip -d /tmp/rmtfinal-fresh
+          cd "/tmp/rmtfinal-fresh/RMT FINAL"
+          chmod +x build.sh rebuild_manifest.sh tools/*.py tests/first_pressure_matrix.sh
+          ./build.sh
+          ./rebuild_manifest.sh
+          test "$(wc -l < campaign_manifest.csv)" -eq 97
+          echo 'FRESH_EXTRACTION PASS'
+
+      - name: Upload validated RMT FINAL ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMT_FINAL
+          path: RMT_FINAL.zip
+          if-no-files-found: error
+          retention-days: 30
