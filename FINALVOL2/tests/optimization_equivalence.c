@@ -24,7 +24,7 @@ static int one(int nx,int ny){
     for(int i=1;i<=nx;++i)for(int j=1;j<=ny;++j)
         d[IDX(i,j,ny)]=sin(0.071*i)+cos(0.113*j)+0.05*sin(0.013*i*j);
 
-    RMTFinalConfig c0={0,16,0,5};
+    RMTFinalConfig c0={0,16,5};
     RMTFinalDiag q0={0};
     rmt_final_build_correction(&g,d,a,&c0,&q0);
 
