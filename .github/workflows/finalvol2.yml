@@ -1,0 +1,81 @@
+name: FINALVOL2 calibration
+
+on:
+  push:
+    branches: [finalvol2-calibration, main]
+    paths:
+      - 'FINALVOL2/**'
+      - '.github/workflows/finalvol2.yml'
+  workflow_dispatch:
+
+jobs:
+  build-audit-calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and optimization-equivalence audit
+        run: |
+          cd FINALVOL2
+          chmod +x build.sh smoke_local.sh rebuild_manifest.sh run_case.sh                    build_rmt.slurm run_one_case.slurm rmt_96_array.slurm                    submit_gated_96.sh tests/*.sh tools/*.py calibration/*.py calibration/*.slurm
+          ./build.sh
+
+      - name: Exact frozen-V95 first-pressure validation at unchanged 16-sweep baseline
+        run: |
+          cd FINALVOL2
+          OMP_NUM_THREADS=4 RMT_SWEEPS=16 ./tests/first_pressure_matrix.sh
+
+      - name: Reacting-flow smoke at unchanged 16-sweep baseline
+        run: |
+          cd FINALVOL2
+          OMP_NUM_THREADS=4 RMT_SWEEPS=16 ./smoke_local.sh
+
+      - name: Independent smoothing calibration
+        run: |
+          cd FINALVOL2
+          python3 calibration/run_smoothing_calibration.py             --threads 4 --candidates 8,10,12,14,16
+          test -s calibration/calibration_results.csv
+          test -s calibration/calibration_summary.csv
+          test -s calibration/CALIBRATION_RECOMMENDATION.txt
+          cat calibration/calibration_summary.csv
+          cat calibration/CALIBRATION_RECOMMENDATION.txt
+
+      - name: Manifest audit only
+        run: |
+          cd FINALVOL2
+          ./rebuild_manifest.sh
+          test "$(wc -l < campaign_manifest.csv)" -eq 97
+
+      - name: Fresh extraction build
+        run: |
+          rm -rf /tmp/finalvol2-stage /tmp/finalvol2-fresh
+          mkdir -p /tmp/finalvol2-stage /tmp/finalvol2-fresh
+          cp -a FINALVOL2 /tmp/finalvol2-stage/
+          rm -rf /tmp/finalvol2-stage/FINALVOL2/build                  /tmp/finalvol2-stage/FINALVOL2/smoke_output                  /tmp/finalvol2-stage/FINALVOL2/first_pressure_logs                  /tmp/finalvol2-stage/FINALVOL2/results
+          rm -f /tmp/finalvol2-stage/FINALVOL2/calibration/calibration_results.csv                 /tmp/finalvol2-stage/FINALVOL2/calibration/calibration_summary.csv                 /tmp/finalvol2-stage/FINALVOL2/calibration/CALIBRATION_RECOMMENDATION.txt
+          (cd /tmp/finalvol2-stage && zip -qr "$GITHUB_WORKSPACE/FINALVOL2.zip" FINALVOL2)
+          unzip -q FINALVOL2.zip -d /tmp/finalvol2-fresh
+          cd /tmp/finalvol2-fresh/FINALVOL2
+          chmod +x build.sh tools/*.py tests/*.sh calibration/*.py
+          ./build.sh
+          echo 'FRESH_EXTRACTION PASS'
+
+      - name: Upload calibration package
+        uses: actions/upload-artifact@v4
+        with:
+          name: FINALVOL2
+          path: FINALVOL2.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload calibration results
+        uses: actions/upload-artifact@v4
+        with:
+          name: FINALVOL2-calibration-results
+          path: |
+            FINALVOL2/calibration/calibration_results.csv
+            FINALVOL2/calibration/calibration_summary.csv
+            FINALVOL2/calibration/CALIBRATION_RECOMMENDATION.txt
+          if-no-files-found: error
+          retention-days: 30
