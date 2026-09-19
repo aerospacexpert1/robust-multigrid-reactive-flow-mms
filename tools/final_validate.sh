@@ -87,7 +87,7 @@ for c in "$ROOT"/Benchmark_*/src/mms_solver.c; do
   grep -q 'rbgs(s,16)' "$c"
   grep -q 'Full correction: no damping' "$c"
   grep -q 'it+=1' "$c"
-  if grep -q 'omegaTry\|line search\|after>1.5\*before\|memcpy(s->q,save' "$c"; then
+  if grep -q 'omegaTry\|after>1.5\*before\|memcpy(s->q,save\|omegaTry\*=' "$c"; then
     echo "forbidden RMT damping/line-search/fallback found in $c"; exit 1
   fi
 done
