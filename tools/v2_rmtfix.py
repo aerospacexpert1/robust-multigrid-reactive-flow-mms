@@ -188,4 +188,38 @@ for c in ROOT.glob('Benchmark_*/src/mms_solver.c'):
 
     c.write_text(s)
 
+
+# Update generated correspondence notes so the package does not describe the
+# superseded damped/line-searched benchmark RMT.
+for d in ROOT.glob('Benchmark_*'):
+    doc=d/'docs'/'PRODUCTION_SOLVER_CORRESPONDENCE.md'
+    if doc.exists():
+        q=doc.read_text()
+        q=re.sub(
+            r'RMT3H uses factor-three nine shifted coarse families.*?(?=\n\n|\Z)',
+            'RMT3H uses factor-three nine shifted coarse families, no presmoothing, '
+            'control-volume defect restriction, direct solution on every coarsest '
+            'shifted grid, a single globally fixed 16-sweep postsmoothing count, '
+            'and full index-space correction without interpolation, damping, '
+            'line search, rollback, or hidden fallback.',
+            q,flags=re.S
+        )
+        doc.write_text(q)
+
+note=ROOT/'V2_METHOD_CHANGES.md'
+if note.exists():
+    q=note.read_text()
+    q=re.sub(
+        r'- RMT3H is recursively factor-three.*',
+        '- RMT3H is a production-aligned factor-three multiple-shifted-grid '
+        'benchmark adaptation: no presmoothing, control-volume defect restriction, '
+        'direct coarsest solves, 16 post-smoothing sweeps, and full correction '
+        'without interpolation, damping, line search, rollback, or hidden fallback.',
+        q
+    )
+    note.write_text(q)
+    for d in ROOT.glob('Benchmark_*'):
+        p=d/'docs'/'V2_FIDELITY_NOTE.md'
+        if p.exists(): p.write_text(q)
+
 print('V3_RMT_PRODUCTION_ALIGNMENT_COMPLETE')
