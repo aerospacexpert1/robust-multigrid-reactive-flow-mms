@@ -7,7 +7,8 @@ chemistry-off species transport: PASS
 D sensible-enthalpy transport + h->T->rho closure: PASS
 D operator-split Arrhenius heat-release kernel check: PASS
 recursive factor-three nine-shift RMT structure: PASS
-RMT residual-correction field + top-level-only omega line search: PASS
+RMT direct coarsest solve + 16-sweep postsmoothing: PASS
+RMT full correction without damping/line-search/fallback: PASS
 shell / Slurm syntax: PASS
 Python syntax: PASS
 GCC -fopenmp A/B/C/D: PASS
@@ -21,7 +22,10 @@ T1/T2/T4/T16 counts 75 each/benchmark: PASS
 M1..M5 counts 60 each/benchmark: PASS
 solver counts 60 each/benchmark: PASS
 OMP mapping 1/2/4/16: PASS
-Slurm nodes=1 ntasks=1 cpus-per-task=56: PASS
+Slurm 60-group submission preserves all 300 executions/benchmark: PASS
+Slurm array=0-59%3 stays below TRUBA MaxArraySize=100: PASS
+five solvers run sequentially on the same node per physical configuration: PASS
+Slurm nodes=1 ntasks=1 cpus-per-task=56 exclusive: PASS
 SLURM_SUBMIT_DIR fix: PASS
 continuous-source finite sanity S1-S3 at M1: PASS
 M1->M2->M3 grid-convergence sanity using converged MG3V algebraic solves: PASS
