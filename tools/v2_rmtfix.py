@@ -168,13 +168,24 @@ static int solve(Sys*s,const char*solver,double tol,int maxit){
 
 for c in ROOT.glob('Benchmark_*/src/mms_solver.c'):
     s=c.read_text()
-    pat=r'static void rmt_error_recursive\(Sys\*s,int level\)\{.*?\nstatic int solve\(Sys\*s,const char\*solver,double tol,int maxit\)\{.*?\n\}'
-    if not re.search(pat,s,flags=re.S):
-        # First application can still contain the previous rmt block followed by solve.
-        pat=r'static void rmt_error_recursive\(Sys\*s,int level\)\{.*?\nstatic int solve\(Sys\*s,const char\*solver,double tol,int maxit\).*?return it;\}'
-    if not re.search(pat,s,flags=re.S):
-        raise SystemExit(f'RMT/solve block not found in {c}')
-    s=re.sub(pat,lambda _: RMT+'\n'+SOLVE.rstrip(),s,flags=re.S)
+
+    # Replace only the RMT implementation while leaving the following solve()
+    # declaration as a stable anchor.
+    pat_rmt=r'static void rmt_error_recursive\(Sys\*s,int level\)\{.*?\nstatic int solve\(Sys\*s,const char\*solver,double tol,int maxit\)'
+    if not re.search(pat_rmt,s,flags=re.S):
+        raise SystemExit(f'RMT block not found in {c}')
+    s=re.sub(
+        pat_rmt,
+        lambda _: RMT+'\nstatic int solve(Sys*s,const char*solver,double tol,int maxit)',
+        s,flags=re.S
+    )
+
+    # Replace the complete solver dispatcher up to the next stable function.
+    pat_solve=r'static int solve\(Sys\*s,const char\*solver,double tol,int maxit\).*?\nstatic void norms'
+    if not re.search(pat_solve,s,flags=re.S):
+        raise SystemExit(f'solve block not found in {c}')
+    s=re.sub(pat_solve,lambda _: SOLVE.rstrip()+'\nstatic void norms',s,flags=re.S)
+
     c.write_text(s)
 
 print('V3_RMT_PRODUCTION_ALIGNMENT_COMPLETE')
