@@ -192,21 +192,84 @@ def scripts(bdir,bench):
     (bdir/'Makefile').write_text('.PHONY: all build verify smoke clean\nall: build verify\nbuild:\n\t./build.sh\nverify:\n\t./verify_campaign.sh\nsmoke:\n\t./smoke_test.sh\nclean:\n\t./clean_results.sh\n')
     run='''#!/usr/bin/env bash
 set -euo pipefail
-idx="${1:?task index required}"
+idx="\${1:?task index required}"
 IFS=, read -r task stiffness mesh Nx Ny tlabel threads solver < <(awk -F, -v n=$((idx+2)) 'NR==n{print $0}' campaign_manifest.csv)
-[ -n "${task:-}" ] || { echo "task not found" >&2; exit 2; }
+[ -n "\${task:-}" ] || { echo "task not found" >&2; exit 2; }
 export OMP_NUM_THREADS="$threads" OMP_THREAD_LIMIT="$threads"
-out="results/${stiffness}/${mesh}/${tlabel}/${solver}"; mkdir -p "$out" logs
-touch "$out/started"; rm -f "$out/completed"
+out="results/\${stiffness}/\${mesh}/\${tlabel}/\${solver}"; mkdir -p "$out" logs
+if [[ -f "$out/completed" && -s "$out/case_summary.csv" ]]; then
+  echo "SKIP completed task=$idx solver=$solver mesh=$mesh threads=$threads"
+  exit 0
+fi
+touch "$out/started"; rm -f "$out/completed" "$out/failed" "$out/nonconverged"
+set +e
 ./build/mms_solver --Nx "$Nx" --Ny "$Ny" --stiffness "$stiffness" --solver "$solver" --out "$out/case_summary.csv" >"$out/run.log" 2>&1
-touch "$out/completed"
+rc=$?
+set -e
+printf '%s\n' "$rc" > "$out/solver_exit_code"
+if [[ "$rc" -eq 0 || "$rc" -eq 3 ]]; then
+  touch "$out/completed"
+  if [[ "$rc" -eq 3 ]]; then
+    touch "$out/nonconverged"
+    echo "NONCONVERGED recorded as benchmark data: task=$idx solver=$solver" >&2
+  fi
+  exit 0
+fi
+touch "$out/failed"
+exit "$rc"
 '''
     (bdir/'run_case.sh').write_text(run)
-    slurm=f'''#!/bin/bash\n#SBATCH --job-name=MMS_{bench}\n#SBATCH --nodes=1\n#SBATCH --ntasks=1\n#SBATCH --cpus-per-task=56\n#SBATCH --array=0-299%3\n#SBATCH --output=logs/slurm-%A_%a.out\n#SBATCH --error=logs/slurm-%A_%a.err\nset -euo pipefail\ncd "${{SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is not set}}"\n./run_case.sh "${{SLURM_ARRAY_TASK_ID}}"\n'''
+    # TRUBA MaxArraySize=100 and per-user submitted-job limits make a 300-element
+    # array invalid/impractical.  There are exactly 60 physical configurations,
+    # each represented by five consecutive solver rows in the manifest.  One
+    # Slurm array element therefore runs those five solvers sequentially on the
+    # same allocated node.  This preserves all 300 solver executions, reduces the
+    # scheduler footprint from 300 to 60 jobs, and improves hardware fairness.
+    slurm=f'''#!/bin/bash
+#SBATCH --job-name=MMS_{bench}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=56
+#SBATCH --exclusive
+#SBATCH --time=3-00:00:00
+#SBATCH --array=0-59%3
+#SBATCH --output=logs/slurm-%A_%a.out
+#SBATCH --error=logs/slurm-%A_%a.err
+set -euo pipefail
+cd "\${{SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR is not set}}"
+
+if [[ -n "\${{SINGLE_TASK_ID:-}}" ]]; then
+    ./run_case.sh "\${{SINGLE_TASK_ID}}"
+    exit $?
+fi
+
+group="\${{SLURM_ARRAY_TASK_ID}}"
+base=$((group*5))
+echo "physical_group=$group real_tasks=$base-$((base+4)) host=$(hostname)"
+for local_id in 0 1 2 3 4; do
+    ./run_case.sh "$((base+local_id))"
+done
+'''
     (bdir/f'benchmark_{bench}_array.slurm').write_text(slurm)
-    (bdir/'submit_all.sh').write_text(f'#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p logs\nsbatch benchmark_{bench}_array.slurm\n')
-    (bdir/'submit_task0.sh').write_text(f'#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p logs\nsbatch --array=0 benchmark_{bench}_array.slurm\n')
-    (bdir/'submit_index.sh').write_text(f'#!/usr/bin/env bash\nset -euo pipefail\nidx="${{1:?index}}"\nmkdir -p logs\nsbatch --array="$idx" benchmark_{bench}_array.slurm\n')
+    (bdir/'submit_all.sh').write_text(f'''#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p logs
+echo "Submitting 60 physical groups x 5 solvers = 300 executions"
+echo "At most 3 physical groups run concurrently; each group runs its five solvers sequentially on one node."
+sbatch benchmark_{bench}_array.slurm
+''')
+    (bdir/'submit_task0.sh').write_text(f'''#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p logs
+sbatch --array=0 --export=ALL,SINGLE_TASK_ID=0 benchmark_{bench}_array.slurm
+''')
+    (bdir/'submit_index.sh').write_text(f'''#!/usr/bin/env bash
+set -euo pipefail
+idx="\${{1:?index}}"
+[[ "$idx" =~ ^[0-9]+$ ]] && (( idx >= 0 && idx < 300 )) || {{ echo "index must be 0..299" >&2; exit 2; }}
+mkdir -p logs
+sbatch --array=0 --export=ALL,SINGLE_TASK_ID="$idx" benchmark_{bench}_array.slurm
+''')
     smoke='''#!/usr/bin/env bash
 set -euo pipefail
 ./build.sh
@@ -252,7 +315,7 @@ for bench,dirname,title in BENCHES:
     manifest(bdir/'campaign_manifest.csv'); docs(bdir,bench,title); scripts(bdir,bench); pytools(bdir)
     (bdir/'README.md').write_text(f'''# Benchmark {bench} — {title}\n\nFormal continuous-operator MMS verification campaign.\n\n- Stiffness: S1 Low, S2 Medium, S3 High\n- Meshes: 108x36, 216x72, 432x144, 864x288, 1728x576\n- Threads: 1, 2, 4, 16\n- Solvers: SG_RBGS, MG2V, MG2W, MG3V, RMT3H\n- 60 unique physical MMS configurations; 300 solver executions.\n''')
 
-(ROOT/'README.md').write_text('''# MMS_BENCHMARKS_ABCD_TRUBA_V1\n\nA = Pressure Projection / Continuity\nB = Momentum\nC = Species Transport\nD = Thermochemistry + Energy\n\nMeshes: 108x36, 216x72, 432x144, 864x288, 1728x576. Threads: 1,2,4,16. Stiffness: S1/S2/S3. Solvers: SG_RBGS, MG2V, MG2W, MG3V, RMT3H. Each benchmark has 60 physical MMS configurations and 300 solver executions; total 240 physical configurations and 1200 solver executions. TRUBA/ORFOZ Slurm allocation is one node, one task, 56 CPUs/task while actual OpenMP threads come from the manifest.\n''')
+(ROOT/'README.md').write_text('''# MMS_BENCHMARKS_ABCD_TRUBA_V1\n\nA = Pressure Projection / Continuity\nB = Momentum\nC = Species Transport\nD = Thermochemistry + Energy\n\nMeshes: 108x36, 216x72, 432x144, 864x288, 1728x576. Threads: 1,2,4,16. Stiffness: S1/S2/S3. Solvers: SG_RBGS, MG2V, MG2W, MG3V, RMT3H. Each benchmark has 60 physical MMS configurations and 300 solver executions; total 240 physical configurations and 1200 solver executions. TRUBA submission uses 60 Slurm array elements per benchmark, with each element executing the five solver variants for one physical configuration sequentially on the same node. This stays below MaxArraySize=100 without reducing the campaign. Each allocation uses one node, one task, 56 CPUs/task while actual OpenMP threads come from the manifest.\n''')
 (ROOT/'BENCHMARK_MATRIX.md').write_text('| Benchmark | Block | Visual character |\n|---|---|---|\n| A | Pressure projection | multi-lobed / saddle pressure |\n| B | Momentum | opposed stagnation + vortex |\n| C | Species transport | fuel/oxidizer mixing layer + product band |\n| D | Thermochemistry + energy | localized curved flame sheet |\n')
 (ROOT/'VALIDATION_REPORT.txt').write_text('Generated package. Final PASS/FAIL entries are written by CI validation workflow after build/smoke/grid/ZIP/fresh-extraction checks.\n')
 print('generated',ROOT)
