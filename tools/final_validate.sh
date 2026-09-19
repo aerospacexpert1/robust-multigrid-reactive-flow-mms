@@ -57,23 +57,39 @@ print('MANIFEST_PASS')
 PY
 
 # Scheduler allocation versus actual OMP mapping.
+# TRUBA MaxArraySize=100: keep all 300 executions, but submit only the 60
+# physical configurations.  Each array element runs the five solver variants
+# sequentially on the same node, which also reduces node-to-node timing bias.
 for f in "$ROOT"/Benchmark_*/*.slurm; do
   grep -q '#SBATCH --nodes=1' "$f"
   grep -q '#SBATCH --ntasks=1' "$f"
   grep -q '#SBATCH --cpus-per-task=56' "$f"
+  grep -q '#SBATCH --exclusive' "$f"
+  grep -q '#SBATCH --array=0-59%3' "$f"
   grep -q 'SLURM_SUBMIT_DIR' "$f"
-  grep -q 'run_case.sh.*SLURM_ARRAY_TASK_ID' "$f"
+  grep -q 'base=$((group\*5))' "$f"
+  grep -q 'for local_id in 0 1 2 3 4' "$f"
+  grep -q 'SINGLE_TASK_ID' "$f"
 done
-for f in "$ROOT"/Benchmark_*/run_case.sh; do grep -q OMP_NUM_THREADS "$f"; grep -q OMP_THREAD_LIMIT "$f"; done
+for f in "$ROOT"/Benchmark_*/run_case.sh; do
+  grep -q OMP_NUM_THREADS "$f"
+  grep -q OMP_THREAD_LIMIT "$f"
+  grep -q 'SKIP completed' "$f"
+  grep -q 'NONCONVERGED recorded as benchmark data' "$f"
+done
 
-# V2 source invariants.
+# Production-aligned RMT source invariants.
 for c in "$ROOT"/Benchmark_*/src/mms_solver.c; do
   grep -q 'rmt_error_recursive' "$c"
-  grep -q 'for(int sx=0;sx<3;sx++)for(int sy=0;sy<3;sy++)' "$c"
+  grep -q 'for(int sy=0;sy<3;sy++)for(int sx=0;sx<3;sx++)' "$c"
   grep -q 'rmt_error_recursive(&c,level+1)' "$c"
-  grep -q 'double omegaTry=0.005' "$c"
-  grep -q 'rbgs(s,6)' "$c"
-  if grep -q '0.005.c.q' "$c"; then echo "per-level RMT damping found in $c"; exit 1; fi
+  grep -q 'rmt_direct_dense' "$c"
+  grep -q 'rbgs(s,16)' "$c"
+  grep -q 'Full correction: no damping' "$c"
+  grep -q 'it+=1' "$c"
+  if grep -q 'omegaTry\|line search\|after>1.5\*before\|memcpy(s->q,save' "$c"; then
+    echo "forbidden RMT damping/line-search/fallback found in $c"; exit 1
+  fi
 done
 grep -q 'double De=dy/dx' "$ROOT/Benchmark_A_Pressure_Projection/src/mms_solver.c"
 grep -q 'projection_continuity' "$ROOT/Benchmark_A_Pressure_Projection/src/mms_solver.c"
@@ -172,7 +188,8 @@ chemistry-off species transport: PASS
 D sensible-enthalpy transport + h->T->rho closure: PASS
 D operator-split Arrhenius heat-release kernel check: PASS
 recursive factor-three nine-shift RMT structure: PASS
-RMT residual-correction field + top-level-only omega line search: PASS
+RMT direct coarsest solve + 16-sweep postsmoothing: PASS
+RMT full correction without damping/line-search/fallback: PASS
 shell / Slurm syntax: PASS
 Python syntax: PASS
 GCC -fopenmp A/B/C/D: PASS
@@ -186,7 +203,10 @@ T1/T2/T4/T16 counts 75 each/benchmark: PASS
 M1..M5 counts 60 each/benchmark: PASS
 solver counts 60 each/benchmark: PASS
 OMP mapping 1/2/4/16: PASS
-Slurm nodes=1 ntasks=1 cpus-per-task=56: PASS
+Slurm 60-group submission preserves all 300 executions/benchmark: PASS
+Slurm array=0-59%3 stays below TRUBA MaxArraySize=100: PASS
+five solvers run sequentially on the same node per physical configuration: PASS
+Slurm nodes=1 ntasks=1 cpus-per-task=56 exclusive: PASS
 SLURM_SUBMIT_DIR fix: PASS
 continuous-source finite sanity S1-S3 at M1: PASS
 M1->M2->M3 grid-convergence sanity using converged MG3V algebraic solves: PASS
