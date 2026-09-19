@@ -1,8 +1,8 @@
-name: Final MMS A-D validation V2
+name: Final MMS A-D validation TRUBA V3
 
 on:
   push:
-    branches: [mms-benchmarks-v2]
+    branches: [mms-benchmarks-truba-v3]
     paths:
       - 'tools/**'
       - '.github/workflows/final-mms-validation-v2.yml'
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: mms-benchmarks-v2
+          ref: mms-benchmarks-truba-v3
       - name: Install validation dependencies
         run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
       - name: Generate and run full V2 validation
@@ -50,4 +50,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add dist/MMS_BENCHMARKS_ABCD_TRUBA_V2.zip dist/VALIDATION_REPORT_V2.txt
           git commit -m 'Publish validated MMS A-D V2 artifact [skip ci]' || true
-          git push origin HEAD:mms-benchmarks-v2
+          git push origin HEAD:mms-benchmarks-truba-v3
