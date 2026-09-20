@@ -1,0 +1,55 @@
+name: Validate IMAT 2026 RMT DOCX
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.issue.title == '[IMAT2026] Validate RMT extended abstract'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install LibreOffice and PDF tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libreoffice-writer poppler-utils
+
+      - name: Convert DOCX to PDF
+        run: |
+          mkdir -p /tmp/imat
+          libreoffice --headless --convert-to pdf --outdir /tmp/imat conference/IMAT2026/IMAT2026_RMT_Extended_Abstract.docx
+          test -s /tmp/imat/IMAT2026_RMT_Extended_Abstract.pdf
+          pdfinfo /tmp/imat/IMAT2026_RMT_Extended_Abstract.pdf | tee /tmp/imat/pdfinfo.txt
+          PAGES=$(awk '/^Pages:/ {print $2}' /tmp/imat/pdfinfo.txt)
+          echo "PAGES=$PAGES"
+          if [ "$PAGES" -lt 3 ] || [ "$PAGES" -gt 5 ]; then
+            echo "IMAT current 3-5 page guideline not met: $PAGES pages"
+            exit 1
+          fi
+
+      - name: Text sanity
+        run: |
+          pdftotext /tmp/imat/IMAT2026_RMT_Extended_Abstract.pdf /tmp/imat/text.txt
+          grep -q "Robust Multigrid Pressure Correction" /tmp/imat/text.txt
+          grep -q "Track 1" /tmp/imat/text.txt
+          grep -q "55.2%" /tmp/imat/text.txt
+          grep -q "58.5%" /tmp/imat/text.txt
+          grep -q "11.09" /tmp/imat/text.txt
+          grep -q "References" /tmp/imat/text.txt
+          echo "TEXT SANITY PASS"
+
+      - name: Upload validation PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMAT2026_RMT_Extended_Abstract_PDF_preview
+          path: |
+            /tmp/imat/IMAT2026_RMT_Extended_Abstract.pdf
+            /tmp/imat/pdfinfo.txt
