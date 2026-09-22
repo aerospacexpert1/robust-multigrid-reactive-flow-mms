@@ -63,7 +63,7 @@ for c in ROOT.glob('Benchmark_*/src/mms_solver.c'):
         raise SystemExit(f'V2 RMT block not found in {c}')
     s=re.sub(pat,lambda _:kernel+'\nstatic int solve(Sys*s,const char*solver,double tol,int maxit)',s,flags=re.S)
 
-    pat2=r'static int solve\(Sys\*s,const char\*solver,double tol,int maxit\)\{.*?\n\}\nstatic void norms'
+    pat2=r'static int solve\(Sys\*s,const char\*solver,double tol,int maxit\).*?\nstatic void norms'
     if not re.search(pat2,s,flags=re.S):
         raise SystemExit(f'solve block not found in {c}')
     s=re.sub(pat2,lambda _:solve_v3+'\nstatic void norms',s,flags=re.S)
