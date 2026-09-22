@@ -1,0 +1,20 @@
+MMS_BENCHMARKS_ABCD_TRUBA_V3 — VALIDATION
+==========================================
+V2 18-way recursive RMT tree removed: PASS
+single fine-index RMT correction workspace: PASS
+automatic factor-three x/y hierarchy: PASS
+single coarsest-to-finest sawtooth traversal: PASS
+control-volume fine-defect restriction with prefix reuse: PASS
+direct tiny coarsest shifted-grid solves: PASS
+16-sweep noncoarsest RBGS postsmoothing: PASS
+full RMT correction omega=1: PASS
+V2 residual-monotonic line search removed: PASS
+RMT hidden SG fallback removed: PASS
+TRUBA MaxArraySize=100 three-batch submission: PASS
+TASK_OFFSET mapping 0/100/200: PASS
+afterany batch chaining and %3 concurrency: PASS
+300-row manifest preserved per benchmark: PASS
+GCC OpenMP A/B/C/D build: PASS
+M1 A-D x all five solvers: PASS
+A pressure RMT M1/M2/M3 ladder: PASS
+ZIP integrity and fresh extraction build: PASS
