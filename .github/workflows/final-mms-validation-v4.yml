@@ -1,0 +1,49 @@
+name: Final MMS A-D validation V4
+
+on:
+  push:
+    branches: [mms-benchmarks-v4]
+    paths:
+      - 'tools/v4_*'
+      - 'tools/final_validate_v4.sh'
+      - '.github/workflows/final-mms-validation-v4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-v4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mms-benchmarks-v4
+
+      - name: Install validation dependencies
+        run: python3 -m pip install --disable-pip-version-check sympy numpy matplotlib
+
+      - name: Generate and validate V4
+        run: bash tools/final_validate_v4.sh
+
+      - name: Upload validated V4 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: MMS_BENCHMARKS_ABCD_TRUBA_V4
+          path: MMS_BENCHMARKS_ABCD_TRUBA_V4.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish V4 ZIP and report
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V4.zip dist/MMS_BENCHMARKS_ABCD_TRUBA_V4.zip
+          cp MMS_BENCHMARKS_ABCD_TRUBA_V4/VALIDATION_REPORT.txt dist/VALIDATION_REPORT_V4.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/MMS_BENCHMARKS_ABCD_TRUBA_V4.zip dist/VALIDATION_REPORT_V4.txt
+          git commit -m 'Publish validated MMS A-D V4 artifact [skip ci]' || true
+          git push origin HEAD:mms-benchmarks-v4
