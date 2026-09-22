@@ -58,12 +58,12 @@ static int solve(Sys*s,const char*solver,double tol,int maxit){
 
 for c in ROOT.glob('Benchmark_*/src/mms_solver.c'):
     s=c.read_text()
-    pat=r'/\\* V2 RMT production-flow correction:.*?\\nstatic int solve\\(Sys\\*s,const char\\*solver,double tol,int maxit\\)'
+    pat=r'/\* V2 RMT production-flow correction:.*?\nstatic int solve\(Sys\*s,const char\*solver,double tol,int maxit\)'
     if not re.search(pat,s,flags=re.S):
         raise SystemExit(f'V2 RMT block not found in {c}')
     s=re.sub(pat,lambda _:kernel+'\nstatic int solve(Sys*s,const char*solver,double tol,int maxit)',s,flags=re.S)
 
-    pat2=r'static int solve\\(Sys\\*s,const char\\*solver,double tol,int maxit\\)\\{.*?\\n\\}\\nstatic void norms'
+    pat2=r'static int solve\(Sys\*s,const char\*solver,double tol,int maxit\)\{.*?\n\}\nstatic void norms'
     if not re.search(pat2,s,flags=re.S):
         raise SystemExit(f'solve block not found in {c}')
     s=re.sub(pat2,lambda _:solve_v3+'\nstatic void norms',s,flags=re.S)
@@ -73,7 +73,7 @@ for d in ROOT.glob('Benchmark_*'):
     bench=d.name.split('_')[1]
     slurm=d/f'benchmark_{bench}_array.slurm'
     s=slurm.read_text()
-    s=re.sub(r'^#SBATCH --array=.*\\n','',s,flags=re.M)
+    s=re.sub(r'^#SBATCH --array=.*\n','',s,flags=re.M)
     old='./run_case.sh "'+'$'+'{SLURM_ARRAY_TASK_ID}"'
     new='TASK_OFFSET="'+'$'+'{TASK_OFFSET:-0}"\n' \
         'TASK_ID=$((SLURM_ARRAY_TASK_ID + TASK_OFFSET))\n' \
