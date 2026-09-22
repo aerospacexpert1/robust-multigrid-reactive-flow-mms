@@ -45,10 +45,12 @@ static int solve(Sys*s,const char*solver,double tol,int maxit){
 for c in ROOT.glob('Benchmark_*/src/mms_solver.c'):
     s=c.read_text()
 
-    old='static void onevar_v2(int nx,int ny,int st,char var,const char*solver,VR*o,double*TL2,double*rL2,double*Trel,double*rrel){Sys s;allocsys(&s,nx,ny);'
-    new='static void onevar_v2(int nx,int ny,int st,char var,const char*solver,VR*o,double*TL2,double*rL2,double*Trel,double*rrel){Sys s;allocsys(&s,nx+1,ny+1);'
-    if old not in s: raise SystemExit(f'V4 onevar grid anchor missing in {c}')
-    s=s.replace(old,new,1)
+    # Benchmark D has an extra Qchem output parameter; patch the allocation
+    # independently of the exact onevar_v2 signature.
+    pat_grid=r'(static void onevar_v2\\([^\\n]*\\)\\{Sys s;)allocsys\\(&s,nx,ny\\);'
+    if not re.search(pat_grid,s):
+        raise SystemExit(f'V4 onevar grid anchor missing in {c}')
+    s=re.sub(pat_grid,r'\\1allocsys(&s,nx+1,ny+1);',s,count=1)
 
     old="double cont=(BENCH_ID=='A')?projection_continuity(nx,ny,st,solver):0.0;"
     new="double cont=(BENCH_ID=='A')?projection_continuity(nx+1,ny+1,st,solver):0.0;"
