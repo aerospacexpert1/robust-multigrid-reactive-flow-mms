@@ -1,0 +1,18 @@
+MMS_BENCHMARKS_ABCD_TRUBA_V4 — VALIDATION
+==========================================
+V3 production-structure RMT retained: PASS
+logical Nx,Ny interpreted as interval counts (Nx+1 x Ny+1 nodes): PASS
+factor-two/factor-three exact nested geometry: PASS
+conventional MG residual unit consistency: PASS
+full-weighting restriction and bilinear prolongation: PASS
+same fine system / initial guess / tolerance across solvers: PASS
+no MG rollback or hidden SG fallback: PASS
+300-row manifest preserved per benchmark: PASS
+60 physical groups x 5 sequential solvers mapping: PASS
+single Slurm array 0-59%3: PASS
+TRUBA MaxArraySize=100 safe: PASS
+old TASK_OFFSET / 3x100 chained arrays removed: PASS
+GCC OpenMP A/B/C/D build: PASS
+M1 A-D x all five solvers: PASS
+Benchmark A M1/M2/M3 all-solver solution agreement: PASS
+ZIP integrity and fresh extraction build: PASS
