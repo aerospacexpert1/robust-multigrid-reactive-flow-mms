@@ -95,11 +95,11 @@ echo "TRUBA MaxArraySize=100"
 echo "Maximum simultaneous cases = 3"
 
 JOB1_RAW=$(sbatch --parsable --array=0-99%3 --export=ALL,TASK_OFFSET=0 benchmark_{bench}_array.slurm)
-JOB1="$"+"{JOB1_RAW%%;*}"
-JOB2_RAW=$(sbatch --parsable --dependency=afterany:"$"+"{JOB1}" --array=0-99%3 --export=ALL,TASK_OFFSET=100 benchmark_{bench}_array.slurm)
-JOB2="$"+"{JOB2_RAW%%;*}"
-JOB3_RAW=$(sbatch --parsable --dependency=afterany:"$"+"{JOB2}" --array=0-99%3 --export=ALL,TASK_OFFSET=200 benchmark_{bench}_array.slurm)
-JOB3="$"+"{JOB3_RAW%%;*}"
+JOB1="${{JOB1_RAW%%;*}}"
+JOB2_RAW=$(sbatch --parsable --dependency=afterany:${{JOB1}} --array=0-99%3 --export=ALL,TASK_OFFSET=100 benchmark_{bench}_array.slurm)
+JOB2="${{JOB2_RAW%%;*}}"
+JOB3_RAW=$(sbatch --parsable --dependency=afterany:${{JOB2}} --array=0-99%3 --export=ALL,TASK_OFFSET=200 benchmark_{bench}_array.slurm)
+JOB3="${{JOB3_RAW%%;*}}"
 
 cat > campaign_jobs.txt <<EOT
 Benchmark {bench}
@@ -113,7 +113,7 @@ cat campaign_jobs.txt
 
     submit_idx=f"""#!/usr/bin/env bash
 set -euo pipefail
-idx="$"+"{1:?real manifest index 0..299 required}"
+idx="${{1:?real manifest index 0..299 required}}"
 if (( idx < 0 || idx > 299 )); then
   echo "index must be 0..299" >&2
   exit 2
@@ -121,7 +121,7 @@ fi
 offset=$(( (idx / 100) * 100 ))
 local_id=$(( idx - offset ))
 mkdir -p logs
-sbatch --array="$"+"{local_id}" --export=ALL,TASK_OFFSET="$"+"{offset}" benchmark_{bench}_array.slurm
+sbatch --array="${{local_id}}" --export=ALL,TASK_OFFSET="${{offset}}" benchmark_{bench}_array.slurm
 """
     (d/'submit_index.sh').write_text(submit_idx)
     (d/'submit_task0.sh').write_text(
